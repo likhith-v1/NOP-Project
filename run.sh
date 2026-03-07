@@ -13,5 +13,11 @@ pip install -r requirements.txt
 # Unzip the dataset (if not already unzipped)
 # unzip chest-xray-pneumonia.zip -d xray_data
 
+# kaggle datasets download -d paultimothymooney/kermany2018
+
+# Unzip the dataset (if not already unzipped)
+# unzip kermany2018.zip -d retinal-oct_data
+
+
 # Start training
 python train.py
