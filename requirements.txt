@@ -1,0 +1,16 @@
+# Python 3.12 & above required (3.12 preferred for stablity & reliability)
+
+torch
+torchvision
+torchaudio
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+Pillow
+tqdm
+jupyter
+ipykernel
+kaggle
+scipy
