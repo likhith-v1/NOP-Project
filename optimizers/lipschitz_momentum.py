@@ -111,7 +111,23 @@ class LipschitzMomentumOptimizer(Optimizer):
         v = [vi / (v_norm + 1e-10) for vi in v]
 
         for _ in range(num_iters):
-            hv = self._hvp(loss, params, v)
+            try:
+                hv = self._hvp(loss, params, v)
+            except RuntimeError as e:
+                # Some ops (e.g., max_pool2d with return_indices=False) are not
+                # infinitely differentiable, preventing second-order backprop.
+                # In that case, fall back to the faster secant approximation.
+                msg = str(e)
+                if "max_pool2d" in msg and "not infinitely differentiable" in msg:
+                    if not hasattr(self, "_hvp_warning_shown"):
+                        print(
+                            "[LBM] Warning: HVP failed due to non-differentiable max_pool2d; "
+                            "falling back to secant-estimated Lipschitz constant."
+                        )
+                        self._hvp_warning_shown = True
+                    return 1.0
+                raise
+
             hv_norm = math.sqrt(sum((h**2).sum().item() for h in hv))
             if hv_norm < 1e-10:
                 return 1.0

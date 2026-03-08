@@ -9,7 +9,7 @@ project:
 # Datasets
 
 data:
-  root: "datasets/chest_xray"
+  root: "datasets/xray_data/chest_xray"
   image_size: 224
   num_classes: 2
   class_names: ["NORMAL", "PNEUMONIA"]
@@ -80,7 +80,7 @@ optimizers:
       lambda_up: 10.0           # Multiply when loss increases
       lambda_down: 3.0          # Divide when loss decreases
       lambda_min: 1.0e-6
-      lambda_max: 1.0e2
+      lambda_max: 100.0
 
   # Baseline 1 — Heavy-ball SGD (fixed momentum)
   heavy_ball:
