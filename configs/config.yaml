@@ -61,7 +61,7 @@ loss: # weighted cross-entropy is preferred for imbalanced datasets
 
 # Optimizer
 optimizers:
-  LipschitzMomentum:
+  lipschitz_momentum:
     lr: 0.01
     beta_min: 0.85
     beta_max: 0.999
