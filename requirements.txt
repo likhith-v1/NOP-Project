@@ -14,3 +14,4 @@ jupyter
 ipykernel
 kaggle
 scipy
+pyyaml
