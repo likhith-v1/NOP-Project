@@ -3,7 +3,7 @@
 project:
   name: "LipschitzMomentum-ChestXRay"
   seed: 42
-  device: "mps" # For apple silicon devices otherise falls back to cpu
+  device: "mps" # For apple silicon devices otherwise falls back to cpu
 
 
 # Datasets
@@ -48,28 +48,27 @@ model:
 
 # Training
 training:
-epochs: 30
+  epochs: 30
   early_stopping_patience: 7
   primary_metric: "recall"    # for diagnostics tasks
   save_best_only: true
   checkpoint_dir: "results/checkpoints"
   log_dir: "results/logs"
 
-  loss: # weighted cross-entropy is preferred for imbalanced datasets
-    name: "weighted_cross_entropy" # weights are handled dynamically based on the dataset or set manually, 
-    # class_weights: [3.0, 1.0] # Example weights for NORMAL and PNEUMONIA (if not using dynamic weighting)
+loss: # weighted cross-entropy is preferred for imbalanced datasets
+  name: "weighted_cross_entropy" # weights are handled dynamically based on the dataset or set manually
+  # class_weights: [3.0, 1.0] # Example weights for NORMAL and PNEUMONIA (if not using dynamic weighting)
 
 # Optimizer
-optimizer:
-
+optimizers:
   LipschitzMomentum:
-  lr: 0.01
+    lr: 0.01
     beta_min: 0.85
     beta_max: 0.999
     eps: 1.0e-8
     weight_decay: 1.0e-4
 
-  # Hessian spectral norm estimation
+    # Hessian spectral norm estimation
     power_iter_steps: 5         # Rayleigh quotient iterations per step
     hvp_epsilon: 1.0e-3         # Finite-difference epsilon for HVP fallback
     per_layer: true             # Estimate L_t independently per param group
