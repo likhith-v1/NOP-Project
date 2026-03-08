@@ -1,0 +1,124 @@
+# Tuning hyperparameters for training the model on the ChestXRay dataset using the Lipschitz Momentum optimizer.
+
+project:
+  name: "LipschitzMomentum-ChestXRay"
+  seed: 42
+  device: "mps" # For apple silicon devices otherise falls back to cpu
+
+
+# Datasets
+
+data:
+  root: "datasets/chest_xray"
+  image_size: 224
+  num_classes: 2
+  class_names: ["NORMAL", "PNEUMONIA"]
+
+  # DataLoader
+  batch_size_train: 64
+  batch_size_val: 32
+  batch_size_test: 32
+  num_workers: 4
+  pin_memory: false         # false for CPU/MPS
+
+  # Augmentation (train only)
+  augmentation:
+    random_horizontal_flip: true
+    random_rotation_degrees: 10
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+    random_erasing_prob: 0.1
+
+  # ImageNet normalization (DenseNet-121 pretrained stats)
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std:  [0.229, 0.224, 0.225]
+
+  # Class imbalance — weighted sampler
+  use_weighted_sampler: true
+
+# Model
+model:
+  name: "DenseNet121"
+  pretrained: true
+  dropout_rate: 0.5
+  freeze_features_epochs: 3 # freeze bacbone for 1st 3 epochs then unfreeze for fine tuning
+
+
+# Training
+training:
+epochs: 30
+  early_stopping_patience: 7
+  primary_metric: "recall"    # for diagnostics tasks
+  save_best_only: true
+  checkpoint_dir: "results/checkpoints"
+  log_dir: "results/logs"
+
+  loss: # weighted cross-entropy is preferred for imbalanced datasets
+    name: "weighted_cross_entropy" # weights are handled dynamically based on the dataset or set manually, 
+    # class_weights: [3.0, 1.0] # Example weights for NORMAL and PNEUMONIA (if not using dynamic weighting)
+
+# Optimizer
+optimizer:
+
+  LipschitzMomentum:
+  lr: 0.01
+    beta_min: 0.85
+    beta_max: 0.999
+    eps: 1.0e-8
+    weight_decay: 1.0e-4
+
+  # Hessian spectral norm estimation
+    power_iter_steps: 5         # Rayleigh quotient iterations per step
+    hvp_epsilon: 1.0e-3         # Finite-difference epsilon for HVP fallback
+    per_layer: true             # Estimate L_t independently per param group
+
+    # Levenberg-Marquardt damping
+    lm_damping:
+      enabled: true
+      lambda_init: 1.0e-3
+      lambda_up: 10.0           # Multiply when loss increases
+      lambda_down: 3.0          # Divide when loss decreases
+      lambda_min: 1.0e-6
+      lambda_max: 1.0e2
+
+  # Baseline 1 — Heavy-ball SGD (fixed momentum)
+  heavy_ball:
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 1.0e-4
+    nesterov: false
+
+  # Baseline 2 — Standard Nesterov (fixed momentum)
+  nesterov:
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 1.0e-4
+    nesterov: true
+
+  # Baseline 3 — Adam
+  adam:
+    lr: 1.0e-3
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 1.0e-4
+
+scheduler:
+  name: "cosine_annealing"
+  T_max: 30
+  eta_min: 1.0e-6
+
+# Evaluation
+evaluation:
+  metrics: ["accuracy", "recall", "precision", "f1", "auc_roc", "auprc"]
+  plot_dir: "results/plots"
+  plot_formats: ["png", "pdf"]   # pdf for report, png for viewing
+  dpi: 300
+
+# Comparison runs
+comparison:
+  optimizers_to_run: ["lipschitz_momentum", "heavy_ball", "nesterov", "adam"]
+  shared_seed: 42                # Identical init across all runs
+  save_beta_trajectory: true     # Log β_t per layer per step (unique plot)
+  save_lipschitz_trajectory: true
