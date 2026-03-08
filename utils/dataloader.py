@@ -28,6 +28,7 @@ from torchvision import datasets, transforms
 
 # Helpers
 
+
 def load_config(config_path: str = "configs/config.yaml") -> dict:
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
@@ -35,7 +36,7 @@ def load_config(config_path: str = "configs/config.yaml") -> dict:
 
 def seed_worker(worker_id: int) -> None:
     """Ensure each DataLoader worker is deterministic."""
-    worker_seed = torch.initial_seed() % (2 ** 32)
+    worker_seed = torch.initial_seed() % (2**32)
     np.random.seed(worker_seed)
 
 
@@ -66,6 +67,7 @@ def get_sample_weights(dataset: datasets.ImageFolder) -> torch.Tensor:
 
 # Transforms
 
+
 def build_train_transform(cfg: dict) -> transforms.Compose:
     """
     Aggressive augmentation for training.
@@ -79,7 +81,7 @@ def build_train_transform(cfg: dict) -> transforms.Compose:
     cj = aug.get("color_jitter", {})
 
     transform_list = [
-        transforms.Resize((size + 20, size + 20)),   # slightly oversized for crop
+        transforms.Resize((size + 20, size + 20)),  # slightly oversized for crop
         transforms.RandomCrop(size),
     ]
 
@@ -91,10 +93,12 @@ def build_train_transform(cfg: dict) -> transforms.Compose:
         transform_list.append(transforms.RandomRotation(degrees=rot))
 
     if cj:
-        transform_list.append(transforms.ColorJitter(
-            brightness=cj.get("brightness", 0.2),
-            contrast=cj.get("contrast", 0.2),
-        ))
+        transform_list.append(
+            transforms.ColorJitter(
+                brightness=cj.get("brightness", 0.2),
+                contrast=cj.get("contrast", 0.2),
+            )
+        )
 
     transform_list += [
         transforms.ToTensor(),
@@ -119,15 +123,18 @@ def build_eval_transform(cfg: dict) -> transforms.Compose:
     norm = cfg["data"]["normalize"]
     size = cfg["data"]["image_size"]
 
-    return transforms.Compose([
-        transforms.Resize((size, size)),
-        transforms.CenterCrop(size),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=norm["mean"], std=norm["std"]),
-    ])
+    return transforms.Compose(
+        [
+            transforms.Resize((size, size)),
+            transforms.CenterCrop(size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=norm["mean"], std=norm["std"]),
+        ]
+    )
 
 
 # Dataset + DataLoader factory
+
 
 def build_datasets(cfg: dict) -> Dict[str, datasets.ImageFolder]:
     """
@@ -138,12 +145,12 @@ def build_datasets(cfg: dict) -> Dict[str, datasets.ImageFolder]:
     root = Path(cfg["data"]["root"])
 
     train_tf = build_train_transform(cfg)
-    eval_tf  = build_eval_transform(cfg)
+    eval_tf = build_eval_transform(cfg)
 
     dataset_dict = {
         "train": datasets.ImageFolder(root / "train", transform=train_tf),
-        "val":   datasets.ImageFolder(root / "val",   transform=eval_tf),
-        "test":  datasets.ImageFolder(root / "test",  transform=eval_tf),
+        "val": datasets.ImageFolder(root / "val", transform=eval_tf),
+        "test": datasets.ImageFolder(root / "test", transform=eval_tf),
     }
 
     # Sanity check — class order must be consistent
@@ -183,7 +190,7 @@ def build_dataloaders(
             replacement=True,
             generator=g,
         )
-        shuffle = False   # mutually exclusive with sampler
+        shuffle = False  # mutually exclusive with sampler
     else:
         sampler = None
         shuffle = True
@@ -194,10 +201,10 @@ def build_dataloaders(
         sampler=sampler,
         shuffle=shuffle,
         num_workers=cfg["data"]["num_workers"],
-        pin_memory=cfg["data"]["pin_memory"],   # False for MPS
+        pin_memory=cfg["data"]["pin_memory"],  # False for MPS
         worker_init_fn=seed_worker,
         generator=g,
-        drop_last=True,   # avoids stray 1-sample batches disrupting HVP
+        drop_last=True,  # avoids stray 1-sample batches disrupting HVP
     )
 
     # Val
@@ -223,6 +230,7 @@ def build_dataloaders(
 
 # Dataset statistics helper
 
+
 def print_dataset_stats(cfg: dict) -> None:
     """Print class distribution for all splits."""
     datasets_dict = build_datasets(cfg)
@@ -233,8 +241,8 @@ def print_dataset_stats(cfg: dict) -> None:
 
     for split, ds in datasets_dict.items():
         targets = np.array(ds.targets)
-        counts  = np.bincount(targets)
-        total   = len(targets)
+        counts = np.bincount(targets)
+        total = len(targets)
         print(f"\n  [{split.upper()}]  Total: {total}")
         for idx, cls in enumerate(ds.classes):
             pct = 100 * counts[idx] / total
@@ -260,6 +268,10 @@ if __name__ == "__main__":
     # Grab one batch and verify shapes
     images, labels = next(iter(train_loader))
     print(f"  Train batch → images: {images.shape} | labels: {labels.shape}")
-    print(f"  Pixel range after norm → min: {images.min():.3f} | max: {images.max():.3f}")
-    print(f"  Label distribution in batch → "
-          f"NORMAL: {(labels==0).sum().item()} | PNEUMONIA: {(labels==1).sum().item()}")
+    print(
+        f"  Pixel range after norm → min: {images.min():.3f} | max: {images.max():.3f}"
+    )
+    print(
+        f"  Label distribution in batch → "
+        f"NORMAL: {(labels == 0).sum().item()} | PNEUMONIA: {(labels == 1).sum().item()}"
+    )

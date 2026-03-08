@@ -33,6 +33,7 @@ from optimizers.lipschitz_momentum import LipschitzMomentumOptimizer
 
 # Reproducibility
 
+
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -42,6 +43,7 @@ def set_seed(seed: int) -> None:
 
 
 # Device setup
+
 
 def get_device(cfg: dict) -> torch.device:
     requested = cfg["project"]["device"]
@@ -57,6 +59,7 @@ def get_device(cfg: dict) -> torch.device:
 
 
 # Optimizer factory
+
 
 def build_optimizer(optimizer_name: str, model: nn.Module, cfg: dict):
     ocfg = cfg["optimizers"][optimizer_name]
@@ -112,6 +115,7 @@ def build_optimizer(optimizer_name: str, model: nn.Module, cfg: dict):
 
 # One training epoch
 
+
 def train_one_epoch(
     model: nn.Module,
     loader,
@@ -146,7 +150,7 @@ def train_one_epoch(
 
         # Forward
         logits = model(images)
-        loss   = criterion(logits, labels)
+        loss = criterion(logits, labels)
 
         # Backward
         loss.backward(retain_graph=(use_hvp and step % hvp_interval == 0))
@@ -155,8 +159,10 @@ def train_one_epoch(
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         # Optimizer step
-        if use_hvp and step % hvp_interval == 0 and isinstance(
-            optimizer, LipschitzMomentumOptimizer
+        if (
+            use_hvp
+            and step % hvp_interval == 0
+            and isinstance(optimizer, LipschitzMomentumOptimizer)
         ):
             # Full power-iteration step every hvp_interval batches
             optimizer.step_with_hvp(loss, model)
@@ -169,17 +175,25 @@ def train_one_epoch(
         total_loss += loss.item()
 
         # Update progress bar
-        pbar.set_postfix({
-            "loss": f"{loss.item():.4f}",
-            **({"β": f"{optimizer.get_current_beta():.3f}",
-                "λ": f"{optimizer.get_current_lambda():.1e}"}
-               if isinstance(optimizer, LipschitzMomentumOptimizer) else {}),
-        })
+        pbar.set_postfix(
+            {
+                "loss": f"{loss.item():.4f}",
+                **(
+                    {
+                        "β": f"{optimizer.get_current_beta():.3f}",
+                        "λ": f"{optimizer.get_current_lambda():.1e}",
+                    }
+                    if isinstance(optimizer, LipschitzMomentumOptimizer)
+                    else {}
+                ),
+            }
+        )
 
     return total_loss / num_batches
 
 
 # Validation
+
 
 def validate(
     model: nn.Module,
@@ -198,9 +212,9 @@ def validate(
             labels = labels.to(device)
 
             logits = model(images)
-            loss   = criterion(logits, labels)
-            probs  = torch.softmax(logits, dim=1)[:, 1]
-            preds  = logits.argmax(dim=1)
+            loss = criterion(logits, labels)
+            probs = torch.softmax(logits, dim=1)[:, 1]
+            preds = logits.argmax(dim=1)
 
             total_loss += loss.item()
             all_labels.append(labels.cpu())
@@ -212,12 +226,13 @@ def validate(
     y_prob = torch.cat(all_probs).numpy()
 
     val_loss = total_loss / len(loader)
-    metrics  = compute_metrics(y_true, y_pred, y_prob)
+    metrics = compute_metrics(y_true, y_pred, y_prob)
 
     return val_loss, metrics, y_true, y_pred, y_prob
 
 
 # Main training function
+
 
 def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     seed = cfg["project"]["seed"]
@@ -228,13 +243,13 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     freeze_epochs = cfg["model"]["freeze_features_epochs"]
     patience = cfg["training"]["early_stopping_patience"]
     ckpt_dir = Path(cfg["training"]["checkpoint_dir"])
-    log_dir  = Path(cfg["training"]["log_dir"])
+    log_dir = Path(cfg["training"]["log_dir"])
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Training with: {optimizer_name.upper()}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Data
     train_loader, val_loader, test_loader = build_dataloaders(cfg, seed=seed)
@@ -247,6 +262,7 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     # Loss
     # Compute class weights from training set
     from utils.dataloader import build_datasets
+
     train_ds = build_datasets(cfg)["train"]
     class_weights = get_class_weights(train_ds).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -266,9 +282,8 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     patience_counter = 0
     is_lbm = isinstance(optimizer, LipschitzMomentumOptimizer)
 
-    # Training loop 
+    # Training loop
     for epoch in range(1, epochs + 1):
-
         # Unfreeze backbone after warmup
         if freeze and epoch == freeze_epochs + 1:
             model.unfreeze_backbone()
@@ -277,7 +292,11 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
         t0 = time.time()
 
         train_loss = train_one_epoch(
-            model, train_loader, optimizer, criterion, device,
+            model,
+            train_loader,
+            optimizer,
+            criterion,
+            device,
             epoch=epoch,
             optimizer_name=optimizer_name,
             use_hvp=is_lbm,
@@ -292,8 +311,8 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
         elapsed = time.time() - t0
 
         # Log trajectories for LBM
-        beta_vals = optimizer.beta_log[-len(train_loader):] if is_lbm else None
-        L_vals    = optimizer.lipschitz_log[-len(train_loader):] if is_lbm else None
+        beta_vals = optimizer.beta_log[-len(train_loader) :] if is_lbm else None
+        L_vals = optimizer.lipschitz_log[-len(train_loader) :] if is_lbm else None
 
         tracker.update(
             epoch=epoch,
@@ -313,8 +332,12 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
             f"f1={metrics['f1']:.4f} | "
             f"auc={metrics['auc_roc']:.4f} | "
             f"{elapsed:.1f}s"
-            + (f" | β={optimizer.get_current_beta():.3f} "
-               f"L={optimizer.get_current_lipschitz():.3f}" if is_lbm else "")
+            + (
+                f" | β={optimizer.get_current_beta():.3f} "
+                f"L={optimizer.get_current_lipschitz():.3f}"
+                if is_lbm
+                else ""
+            )
         )
 
         # Checkpoint
@@ -322,19 +345,24 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
             best_recall = recall
             patience_counter = 0
             ckpt_path = ckpt_dir / f"{optimizer_name}_best.pth"
-            torch.save({
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "recall": recall,
-                "metrics": metrics,
-            }, ckpt_path)
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "recall": recall,
+                    "metrics": metrics,
+                },
+                ckpt_path,
+            )
             print(f"    ✓ Checkpoint saved (recall={best_recall:.4f})")
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                print(f"\n  Early stopping at epoch {epoch} "
-                      f"(no improvement for {patience} epochs)")
+                print(
+                    f"\n  Early stopping at epoch {epoch} "
+                    f"(no improvement for {patience} epochs)"
+                )
                 break
 
     # Final test evaluation
@@ -365,7 +393,6 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
 
     tracker.print_summary()
     return tracker
-
 
 
 # Entry point
