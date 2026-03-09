@@ -19,5 +19,5 @@ pip install -r requirements.txt
 # unzip kermany2018.zip -d retinal-oct_data
 
 
-# Start training
-python train.py
+# Start training (default: chest_xray)
+python chest_xray/train.py

@@ -409,7 +409,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/config.yaml",
+        default="chest_xray/configs/config.yaml",
         help="Path to config file",
     )
     args = parser.parse_args()

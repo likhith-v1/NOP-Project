@@ -29,8 +29,21 @@ from torchvision import datasets, transforms
 # Helpers
 
 
-def load_config(config_path: str = "configs/config.yaml") -> dict:
-    with open(config_path, "r") as f:
+def load_config(config_path: str = "chest_xray/configs/config.yaml") -> dict:
+    """Load YAML config.
+
+    If a relative path is provided, it is interpreted relative to the current
+    working directory; if that file doesn't exist, we fall back to the repository
+    root to support running scripts from different locations.
+    """
+    cfg_path = Path(config_path)
+    if not cfg_path.exists():
+        # Try resolving relative to the repo root (two levels up from this file)
+        repo_root = Path(__file__).resolve().parents[2]
+        alt = repo_root / config_path
+        if alt.exists():
+            cfg_path = alt
+    with open(cfg_path, "r") as f:
         return yaml.safe_load(f)
 
 

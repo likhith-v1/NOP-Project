@@ -23,7 +23,7 @@ from utils.metrics import (
     compute_roc_curve, compute_pr_curve
 )
 from models.densenet import build_model
-from train import get_device
+from chest_xray.train import get_device
 
 DPI = 300
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})

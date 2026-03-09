@@ -26,7 +26,7 @@ from typing import Dict, List, Optional
 from utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
 from utils.metrics import MetricTracker, compute_metrics, compute_roc_curve, compute_pr_curve, compute_confusion_matrix, run_inference
 from models.densenet import build_model
-from train import train, get_device, build_optimizer
+from chest_xray.train import train, get_device, build_optimizer
 import torch
 import torch.nn as nn
 
