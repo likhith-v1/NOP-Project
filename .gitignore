@@ -4,3 +4,4 @@ datasets
 __pycache__/
 *.py[cod]
 results/chest_xray/checkpoints/
+results/retinal_oct/checkpoints/

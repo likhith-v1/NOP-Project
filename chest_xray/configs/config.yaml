@@ -52,8 +52,8 @@ training:
   early_stopping_patience: 7
   primary_metric: "recall"    # for diagnostics tasks
   save_best_only: true
-  checkpoint_dir: "results/checkpoints"
-  log_dir: "results/logs"
+  checkpoint_dir: "results/chest_xray/checkpoints"
+  log_dir: "results/chest_xray/logs"
 
 loss: # weighted cross-entropy is preferred for imbalanced datasets
   name: "weighted_cross_entropy" # weights are handled dynamically based on the dataset or set manually
@@ -111,7 +111,7 @@ scheduler:
 # Evaluation
 evaluation:
   metrics: ["accuracy", "recall", "precision", "f1", "auc_roc", "auprc"]
-  plot_dir: "results/plots"
+  plot_dir: "results/chest_xray/plots"
   plot_formats: ["png", "pdf"]   # pdf for report, png for viewing
   dpi: 300
 
