@@ -15,6 +15,12 @@ import os
 import sys
 import json
 import argparse
+
+# Ensure the project root is on sys.path when running as a module (python -m chest_xray.compare)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")   # headless rendering
@@ -23,9 +29,9 @@ import matplotlib.gridspec as gridspec
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
-from utils.metrics import MetricTracker, compute_metrics, compute_roc_curve, compute_pr_curve, compute_confusion_matrix, run_inference
-from models.densenet import build_model
+from chest_xray.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
+from chest_xray.utils.metrics import MetricTracker, compute_metrics, compute_roc_curve, compute_pr_curve, compute_confusion_matrix, run_inference
+from chest_xray.models.densenet import build_model
 from chest_xray.train import train, get_device, build_optimizer
 import torch
 import torch.nn as nn
@@ -262,21 +268,36 @@ def plot_metrics_summary(logs: Dict, plot_dir: Path) -> None:
 
 # Plot 7 — ROC Curves (requires reloading models)
 
-def plot_roc_curves_from_logs(logs: Dict, plot_dir: Path) -> None:
+def plot_roc_curves_from_logs(logs: Dict, cfg: dict, plot_dir: Path) -> None:
+    """Plot ROC curves using saved checkpoints and the test set.
+
+    This is the most accurate way to visualize ROC curves for each optimizer.
+    If a checkpoint is missing, we fall back to a legend-only entry.
     """
-    Approximate ROC using test AUC values from logs.
-    For exact curves, call plot_roc_curves_from_models().
-    """
+
+    device = get_device(cfg)
+    _, _, test_loader = build_dataloaders(cfg, seed=cfg["project"]["seed"])
+
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.set_title("ROC-AUC Comparison (Test Set)", fontweight="bold")
     ax.plot([0, 1], [0, 1], "k--", lw=1, label="Random classifier")
 
-    for opt, log in logs.items():
-        auc = log.get("test_metrics", {}).get("auc_roc", 0)
-        # Draw a stylized ROC-like curve based on AUC
-        # (Replace with actual FPR/TPR when re-running evaluate.py)
-        ax.plot([], [],
-                color=COLORS[opt], ls=LINESTYLES[opt], lw=2,
+    for opt in logs.keys():
+        ckpt_path = Path(cfg["training"]["checkpoint_dir"]) / f"{opt}_best.pth"
+        if not ckpt_path.exists():
+            print(f"  [WARNING] Checkpoint not found for {opt}: {ckpt_path}")
+            continue
+
+        model = build_model(cfg).to(device)
+        ckpt = torch.load(ckpt_path, map_location=device)
+        model.load_state_dict(ckpt["model_state_dict"])
+
+        y_true, y_pred, y_prob = run_inference(model, test_loader, device)
+        metrics = compute_metrics(y_true, y_pred, y_prob)
+        auc = metrics.get("auc_roc", 0.0)
+
+        fpr, tpr, _ = compute_roc_curve(y_true, y_prob)
+        ax.plot(fpr, tpr, lw=2, color=COLORS[opt], ls=LINESTYLES[opt],
                 label=f"{LABELS[opt]}  (AUC={auc:.3f})")
 
     ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")
@@ -319,8 +340,8 @@ def _save(fig, plot_dir: Path, name: str) -> None:
 
 # Main
 
-def main(plot_only: bool = False) -> None:
-    cfg = load_config("configs/config.yaml")
+def main(plot_only: bool = False, config_path: str = "configs/config.yaml") -> None:
+    cfg = load_config(config_path)
     optimizers = cfg["comparison"]["optimizers_to_run"]
     log_dir    = Path(cfg["training"]["log_dir"])
     plot_dir   = Path(cfg["evaluation"]["plot_dir"])
@@ -345,7 +366,7 @@ def main(plot_only: bool = False) -> None:
     plot_lipschitz_trajectory(logs, plot_dir)
     plot_convergence_comparison(logs, plot_dir)
     plot_metrics_summary(logs, plot_dir)
-    plot_roc_curves_from_logs(logs, plot_dir)
+    plot_roc_curves_from_logs(logs, cfg, plot_dir)
     print_comparison_table(logs)
 
     print(f"\n  All plots saved to: {plot_dir}")
@@ -356,5 +377,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--plot-only", action="store_true",
                         help="Skip training, generate plots from existing logs")
+    parser.add_argument("--config", type=str, default="configs/config.yaml",
+                        help="Path to config YAML")
     args = parser.parse_args()
-    main(plot_only=args.plot_only)
+    main(plot_only=args.plot_only, config_path=args.config)

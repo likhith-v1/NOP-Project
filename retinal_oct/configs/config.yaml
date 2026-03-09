@@ -1,0 +1,118 @@
+# Hyperparameters for training on Retinal OCT dataset using Lipschitz Momentum optimizer.
+
+project:
+  name: "LipschitzMomentum-RetinalOCT"
+  seed: 42
+  device: "mps"   # Apple Silicon otherwise falls back to cpu
+
+
+# Dataset
+data:
+  root: "datasets/retinal-oct_data/OCT2017"
+  image_size: 224
+  num_classes: 4
+  class_names: ["CNV", "DME", "DRUSEN", "NORMAL"]
+
+  # DataLoader
+  batch_size_train: 64
+  batch_size_val: 32
+  batch_size_test: 32
+  num_workers: 4
+  pin_memory: false         # false for MPS(not supported), true for GPU, auto for CPU,
+
+  # Augmentation (train only)
+  augmentation:
+    random_horizontal_flip: true
+    random_rotation_degrees: 10
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+    random_erasing_prob: 0.1
+
+  # ImageNet normalization (DenseNet-121 pretrained stats)
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std:  [0.229, 0.224, 0.225]
+
+  # Kermany2018 is roughly balanced — no weighted sampler needed
+  use_weighted_sampler: false
+
+
+# Model
+model:
+  name: "DenseNet121"
+  pretrained: true
+  dropout_rate: 0.5
+  freeze_features_epochs: 3
+
+
+# Training
+training:
+  epochs: 30
+  early_stopping_patience: 7
+  primary_metric: "recall"    # macro-averaged across 4 classes
+  save_best_only: true
+  checkpoint_dir: "results/retinal_oct/checkpoints"
+  log_dir: "results/retinal_oct/logs"
+
+# Loss — standard CrossEntropy (balanced dataset)
+loss:
+  name: "cross_entropy"
+
+
+# Optimizers
+optimizers:
+  lipschitz_momentum:
+    lr: 0.01
+    beta_min: 0.85
+    beta_max: 0.999
+    eps: 1.0e-8
+    weight_decay: 1.0e-4
+    power_iter_steps: 5
+    hvp_epsilon: 1.0e-3
+    per_layer: true
+    lm_damping:
+      enabled: true
+      lambda_init: 1.0e-3
+      lambda_up: 10.0
+      lambda_down: 3.0
+      lambda_min: 1.0e-6
+      lambda_max: 100.0
+
+  heavy_ball:
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 1.0e-4
+    nesterov: false
+
+  nesterov:
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 1.0e-4
+    nesterov: true
+
+  adam:
+    lr: 1.0e-3
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 1.0e-4
+
+scheduler:
+  name: "cosine_annealing"
+  T_max: 30
+  eta_min: 1.0e-6
+
+
+# Evaluation
+evaluation:
+  metrics: ["accuracy", "recall", "precision", "f1", "auc_roc", "auprc"]
+  plot_dir: "results/retinal_oct/plots"
+  plot_formats: ["png", "pdf"]
+  dpi: 300
+
+# Comparison runs
+comparison:
+  optimizers_to_run: ["lipschitz_momentum", "heavy_ball", "nesterov", "adam"]
+  shared_seed: 42
+  save_beta_trajectory: true
+  save_lipschitz_trajectory: true

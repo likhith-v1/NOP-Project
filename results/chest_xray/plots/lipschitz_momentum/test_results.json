@@ -1,0 +1,23 @@
+{
+  "optimizer": "lipschitz_momentum",
+  "checkpoint_epoch": 9,
+  "test_loss": 0.2633455045521259,
+  "metrics": {
+    "accuracy": 0.8974358974358975,
+    "recall": 0.9,
+    "precision": 0.9335106382978723,
+    "f1": 0.9164490861618799,
+    "auc_roc": 0.9575388998465922,
+    "auprc": 0.9620572294604796
+  },
+  "confusion_matrix": [
+    [
+      209,
+      25
+    ],
+    [
+      39,
+      351
+    ]
+  ]
+}

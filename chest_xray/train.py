@@ -25,9 +25,9 @@ from pathlib import Path
 from tqdm import tqdm
 
 # Local imports
-from utils.dataloader import build_dataloaders, load_config, get_class_weights
-from utils.metrics import MetricTracker, compute_metrics, run_inference
-from models.densenet import build_model
+from chest_xray.utils.dataloader import build_dataloaders, load_config, get_class_weights
+from chest_xray.utils.metrics import MetricTracker, compute_metrics, run_inference
+from chest_xray.models.densenet import build_model
 from optimizers.lipschitz_momentum import LipschitzMomentumOptimizer
 
 
