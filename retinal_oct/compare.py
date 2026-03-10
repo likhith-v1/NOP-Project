@@ -25,8 +25,13 @@ if __name__ == "__main__" and __package__ is None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, repo_root)
 
-from retinal_oct.utils.dataloader import load_config
-from retinal_oct.train import train
+from retinal_oct.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
+from retinal_oct.utils.metrics import compute_metrics, compute_roc_curve
+from retinal_oct.models.densenet import build_model
+from retinal_oct.train import train, get_device
+import torch
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_auc_score
 
 COLORS = {
     "lipschitz_momentum": "#E63946",
@@ -212,18 +217,59 @@ def plot_metrics_summary(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "metrics_summary")
 
 
-# Plot 7 — AUC legend chart
+# Plot 7 — ROC Curves (from checkpoints)
 
-def plot_roc_curves_from_logs(logs: Dict, plot_dir: Path) -> None:
+def plot_roc_curves_from_logs(logs: Dict, cfg: dict, plot_dir: Path) -> None:
+    """Plot per-class macro-averaged ROC curves by loading each optimizer's checkpoint."""
+    device = get_device(cfg)
+    _, _, test_loader = build_dataloaders(cfg, seed=cfg["project"]["seed"])
+
     fig, ax = plt.subplots(figsize=(7, 6))
-    ax.set_title("ROC-AUC Comparison — Retinal OCT (Macro, from logs)", fontweight="bold")
+    ax.set_title("ROC-AUC Comparison — Retinal OCT (Macro-avg)", fontweight="bold")
     ax.plot([0, 1], [0, 1], "k--", lw=1, label="Random")
-    for opt, log in logs.items():
-        auc = log.get("test_metrics", {}).get("auc_roc", 0)
-        ax.plot([], [], color=COLORS[opt], ls=LINESTYLES[opt], lw=2,
-                label=f"{LABELS[opt]}  (AUC={auc:.3f})")
+
+    num_classes = len(CLASS_NAMES)
+
+    for opt in logs.keys():
+        ckpt_path = Path(cfg["training"]["checkpoint_dir"]) / f"{opt}_best.pth"
+        if not ckpt_path.exists():
+            print(f"  [WARNING] Checkpoint not found for {opt}: {ckpt_path}")
+            continue
+
+        model = build_model(cfg).to(device)
+        ckpt = torch.load(ckpt_path, map_location=device)
+        model.load_state_dict(ckpt["model_state_dict"])
+        model.eval()
+
+        all_labels, all_probs = [], []
+        with torch.no_grad():
+            for images, labels in test_loader:
+                images = images.to(device)
+                logits = model(images)
+                probs = torch.softmax(logits, dim=1)
+                all_labels.append(labels.cpu())
+                all_probs.append(probs.cpu())
+
+        y_true = torch.cat(all_labels).numpy()
+        y_prob = torch.cat(all_probs, dim=0).numpy()
+        y_true_bin = label_binarize(y_true, classes=list(range(num_classes)))
+
+        # Compute macro-average ROC by averaging per-class FPR/TPR
+        from sklearn.metrics import roc_curve as sk_roc_curve
+        all_fpr = np.linspace(0, 1, 200)
+        mean_tpr = np.zeros_like(all_fpr)
+        for i in range(num_classes):
+            fpr_i, tpr_i, _ = sk_roc_curve(y_true_bin[:, i], y_prob[:, i])
+            mean_tpr += np.interp(all_fpr, fpr_i, tpr_i)
+        mean_tpr /= num_classes
+
+        macro_auc = roc_auc_score(y_true_bin, y_prob, average="macro", multi_class="ovr")
+
+        ax.plot(all_fpr, mean_tpr, lw=2, color=COLORS[opt], ls=LINESTYLES[opt],
+                label=f"{LABELS[opt]}  (AUC={macro_auc:.3f})")
+
     ax.set_xlabel("FPR"); ax.set_ylabel("TPR")
-    ax.set_xlim(0, 1); ax.set_ylim(0, 1.02); ax.legend()
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1.02); ax.legend(loc="lower right")
     plt.tight_layout()
     _save(fig, plot_dir, "roc_summary")
 
@@ -253,8 +299,8 @@ def _save(fig, plot_dir: Path, name: str) -> None:
 
 # Main
 
-def main(plot_only: bool = False) -> None:
-    cfg        = load_config("retinal_oct/configs/config.yaml")
+def main(plot_only: bool = False, config_path: str = "retinal_oct/configs/config.yaml") -> None:
+    cfg        = load_config(config_path)
     optimizers = cfg["comparison"]["optimizers_to_run"]
     log_dir    = Path(cfg["training"]["log_dir"])
     plot_dir   = Path(cfg["evaluation"]["plot_dir"])
@@ -278,7 +324,7 @@ def main(plot_only: bool = False) -> None:
     plot_lipschitz_trajectory(logs, plot_dir)
     plot_convergence_comparison(logs, plot_dir)
     plot_metrics_summary(logs, plot_dir)
-    plot_roc_curves_from_logs(logs, plot_dir)
+    plot_roc_curves_from_logs(logs, cfg, plot_dir)
     print_comparison_table(logs)
 
     print(f"\n  All plots saved to: {plot_dir}")
@@ -288,5 +334,7 @@ def main(plot_only: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--plot-only", action="store_true")
+    parser.add_argument("--config", type=str, default="retinal_oct/configs/config.yaml",
+                        help="Path to config YAML")
     args = parser.parse_args()
-    main(plot_only=args.plot_only)
+    main(plot_only=args.plot_only, config_path=args.config)
