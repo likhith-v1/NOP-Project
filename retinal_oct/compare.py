@@ -1,11 +1,4 @@
-"""
-Runs all 4 optimizers sequentially and generates comparison plots
-for the report — Retinal OCT (4-class).
-
-Usage:
-    python retinal_oct/compare.py                # runs all 4
-    python retinal_oct/compare.py --plot-only    # plots from existing logs
-"""
+"""Cross-optimizer comparison for Retinal OCT (4-class)."""
 
 import os
 import sys
@@ -16,11 +9,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Dict, List, Optional
 
-# Support running this script directly (e.g., `python retinal_oct/compare.py`).
-# When executed this way, sys.path includes `retinal_oct/` but not the repo root.
-# Add the repo root to sys.path so `import retinal_oct.*` works.
+# Add repo root to sys.path when running directly
 if __name__ == "__main__" and __package__ is None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, repo_root)
@@ -64,7 +54,7 @@ plt.rcParams.update({
 })
 
 
-def load_logs(log_dir: Path, optimizers: List[str]) -> Dict[str, dict]:
+def load_logs(log_dir, optimizers):
     logs = {}
     for opt in optimizers:
         path = log_dir / f"{opt}.json"
@@ -76,9 +66,7 @@ def load_logs(log_dir: Path, optimizers: List[str]) -> Dict[str, dict]:
     return logs
 
 
-# Plot 1 — Loss Curves
-
-def plot_loss_curves(logs: Dict, plot_dir: Path) -> None:
+def plot_loss_curves(logs, plot_dir):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle("Training & Validation Loss — Retinal OCT", fontweight="bold")
     for opt, log in logs.items():
@@ -92,9 +80,7 @@ def plot_loss_curves(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "loss_curves")
 
 
-# Plot 2 — Macro Recall (PRIMARY)
-
-def plot_recall_curves(logs: Dict, plot_dir: Path) -> None:
+def plot_recall_curves(logs, plot_dir):
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.set_title("Macro Recall vs. Epoch — Retinal OCT (Primary Metric)", fontweight="bold")
     for opt, log in logs.items():
@@ -107,9 +93,7 @@ def plot_recall_curves(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "recall_curves")
 
 
-# Plot 3 — β_t Trajectory (LBM)
-
-def plot_beta_trajectory(logs: Dict, plot_dir: Path) -> None:
+def plot_beta_trajectory(logs, plot_dir):
     if "lipschitz_momentum" not in logs:
         return
     log = logs["lipschitz_momentum"]
@@ -139,9 +123,7 @@ def plot_beta_trajectory(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "beta_trajectory")
 
 
-# Plot 4 — L_t Trajectory (LBM)
-
-def plot_lipschitz_trajectory(logs: Dict, plot_dir: Path) -> None:
+def plot_lipschitz_trajectory(logs, plot_dir):
     if "lipschitz_momentum" not in logs:
         return
     log = logs["lipschitz_momentum"]
@@ -163,9 +145,7 @@ def plot_lipschitz_trajectory(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "lipschitz_trajectory")
 
 
-# Plot 5 — Convergence Bar Chart
-
-def plot_convergence_comparison(logs: Dict, plot_dir: Path, threshold: float = 0.85) -> None:
+def plot_convergence_comparison(logs, plot_dir, threshold=0.85):
     convergence_epochs = {}
     for opt, log in logs.items():
         conv = None
@@ -193,9 +173,7 @@ def plot_convergence_comparison(logs: Dict, plot_dir: Path, threshold: float = 0
     _save(fig, plot_dir, "convergence_comparison")
 
 
-# Plot 6 — Summary Metrics Bar
-
-def plot_metrics_summary(logs: Dict, plot_dir: Path) -> None:
+def plot_metrics_summary(logs, plot_dir):
     metrics_to_plot = ["recall", "precision", "f1", "auc_roc", "auprc", "accuracy"]
     optimizers = list(logs.keys())
     x = np.arange(len(metrics_to_plot))
@@ -217,10 +195,8 @@ def plot_metrics_summary(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "metrics_summary")
 
 
-# Plot 7 — ROC Curves (from checkpoints)
-
-def plot_roc_curves_from_logs(logs: Dict, cfg: dict, plot_dir: Path) -> None:
-    """Plot per-class macro-averaged ROC curves by loading each optimizer's checkpoint."""
+def plot_roc_curves_from_logs(logs, cfg, plot_dir):
+    """Plot macro-averaged ROC curves from saved checkpoints."""
     device = get_device(cfg)
     _, _, test_loader = build_dataloaders(cfg, seed=cfg["project"]["seed"])
 
@@ -274,9 +250,7 @@ def plot_roc_curves_from_logs(logs: Dict, cfg: dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "roc_summary")
 
 
-# Summary table
-
-def print_comparison_table(logs: Dict) -> None:
+def print_comparison_table(logs):
     metrics = ["recall", "precision", "f1", "auc_roc", "auprc", "accuracy"]
     header  = f"{'Optimizer':<25}" + "".join(f"{m.upper():<12}" for m in metrics)
     print("\n" + "=" * len(header))
@@ -289,7 +263,7 @@ def print_comparison_table(logs: Dict) -> None:
     print("=" * len(header) + "\n")
 
 
-def _save(fig, plot_dir: Path, name: str) -> None:
+def _save(fig, plot_dir, name):
     plot_dir.mkdir(parents=True, exist_ok=True)
     for fmt in ["png", "pdf"]:
         fig.savefig(plot_dir / f"{name}.{fmt}", dpi=DPI, bbox_inches="tight")
@@ -297,18 +271,14 @@ def _save(fig, plot_dir: Path, name: str) -> None:
     print(f"  [Plot] Saved → {plot_dir / name}.png")
 
 
-# Main
-
-def main(plot_only: bool = False, config_path: str = "retinal_oct/configs/config.yaml") -> None:
+def main(plot_only=False, config_path="retinal_oct/configs/config.yaml"):
     cfg        = load_config(config_path)
     optimizers = cfg["comparison"]["optimizers_to_run"]
     log_dir    = Path(cfg["training"]["log_dir"])
     plot_dir   = Path(cfg["evaluation"]["plot_dir"])
 
     if not plot_only:
-        print("\n" + "=" * 60)
-        print("  COMPARISON RUN — All 4 Optimizers  [Retinal OCT]")
-        print("=" * 60)
+        print("\n  Running all optimizers [Retinal OCT]...")
         for opt in optimizers:
             train(opt, cfg)
 
@@ -334,7 +304,6 @@ def main(plot_only: bool = False, config_path: str = "retinal_oct/configs/config
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--plot-only", action="store_true")
-    parser.add_argument("--config", type=str, default="retinal_oct/configs/config.yaml",
-                        help="Path to config YAML")
+    parser.add_argument("--config", type=str, default="retinal_oct/configs/config.yaml")
     args = parser.parse_args()
     main(plot_only=args.plot_only, config_path=args.config)

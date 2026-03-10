@@ -1,17 +1,4 @@
-"""
-Evaluation metrics for binary medical image classification.
-
-Metrics tracked:
-  - Accuracy
-  - Recall (Sensitivity)  ← primary metric for pneumonia detection
-  - Precision
-  - F1 Score
-  - AUC-ROC
-  - AUPRC (Area Under Precision-Recall Curve)
-  - Confusion Matrix
-
-All functions accept numpy arrays or torch tensors.
-"""
+"""Evaluation metrics for binary medical image classification."""
 
 import numpy as np
 import torch
@@ -26,29 +13,10 @@ from sklearn.metrics import (
     roc_curve,
     precision_recall_curve,
 )
-from typing import Dict, Tuple, Optional
 
 
-# Core metric computation
-
-def compute_metrics(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
-    y_prob: np.ndarray,
-    prefix: str = "",
-) -> Dict[str, float]:
-    """
-    Compute all classification metrics.
-
-    Args:
-        y_true : Ground truth labels (0 or 1), shape [N]
-        y_pred : Predicted labels (0 or 1), shape [N]
-        y_prob : Predicted probability for class 1 (PNEUMONIA), shape [N]
-        prefix : Optional string prefix for metric keys (e.g. optimizer name)
-
-    Returns:
-        Dict of metric_name → float value
-    """
+def compute_metrics(y_true, y_pred, y_prob, prefix=""):
+    """Compute all classification metrics."""
     if isinstance(y_true, torch.Tensor):
         y_true = y_true.cpu().numpy()
     if isinstance(y_pred, torch.Tensor):
@@ -70,69 +38,33 @@ def compute_metrics(
     return metrics
 
 
-def compute_confusion_matrix(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
-) -> np.ndarray:
-    """Returns 2×2 confusion matrix [[TN, FP], [FN, TP]]."""
+def compute_confusion_matrix(y_true, y_pred):
     return confusion_matrix(y_true, y_pred)
 
 
-def compute_roc_curve(
-    y_true: np.ndarray,
-    y_prob: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Returns (fpr, tpr, thresholds) for ROC curve plotting."""
+def compute_roc_curve(y_true, y_prob):
     return roc_curve(y_true, y_prob)
 
 
-def compute_pr_curve(
-    y_true: np.ndarray,
-    y_prob: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Returns (precision, recall, thresholds) for PR curve plotting."""
+def compute_pr_curve(y_true, y_prob):
     return precision_recall_curve(y_true, y_prob)
 
 
-# Epoch-level aggregator
-
 class MetricTracker:
-    """
-    Tracks per-epoch metrics across the full training run.
-    Stores history for all optimizers for comparison plots.
+    """Tracks per-epoch metrics across a training run."""
 
-    Usage:
-        tracker = MetricTracker(optimizer_name="lipschitz_momentum")
-        tracker.update(epoch=1, loss=0.42, metrics={...})
-        tracker.get_history("recall")  # → list of recall values per epoch
-    """
-
-    def __init__(self, optimizer_name: str):
+    def __init__(self, optimizer_name):
         self.optimizer_name = optimizer_name
-        self.history: Dict[str, list] = {
-            "epoch": [],
-            "train_loss": [],
-            "val_loss": [],
-            "accuracy": [],
-            "recall": [],
-            "precision": [],
-            "f1": [],
-            "auc_roc": [],
-            "auprc": [],
+        self.history = {
+            "epoch": [], "train_loss": [], "val_loss": [],
+            "accuracy": [], "recall": [], "precision": [],
+            "f1": [], "auc_roc": [], "auprc": [],
         }
-        # Optimizer-specific trajectories
-        self.beta_trajectory: list = []       # β_t per epoch (list of lists for per-layer)
-        self.lipschitz_trajectory: list = []  # L_t per epoch
+        self.beta_trajectory = []
+        self.lipschitz_trajectory = []
 
-    def update(
-        self,
-        epoch: int,
-        train_loss: float,
-        val_loss: float,
-        metrics: Dict[str, float],
-        beta_values: Optional[list] = None,
-        lipschitz_values: Optional[list] = None,
-    ) -> None:
+    def update(self, epoch, train_loss, val_loss, metrics,
+               beta_values=None, lipschitz_values=None):
         self.history["epoch"].append(epoch)
         self.history["train_loss"].append(train_loss)
         self.history["val_loss"].append(val_loss)
@@ -146,31 +78,22 @@ class MetricTracker:
         if lipschitz_values is not None:
             self.lipschitz_trajectory.append(lipschitz_values)
 
-    def get_history(self, metric: str) -> list:
+    def get_history(self, metric):
         return self.history.get(metric, [])
 
-    def best_epoch(self, metric: str = "recall") -> Tuple[int, float]:
-        """Returns (epoch_number, best_value) for a given metric."""
+    def best_epoch(self, metric="recall"):
         vals = self.history[metric]
         best_idx = int(np.argmax(vals))
         return self.history["epoch"][best_idx], vals[best_idx]
 
-    def convergence_epoch(
-        self,
-        metric: str = "recall",
-        threshold: float = 0.90,
-    ) -> Optional[int]:
-        """
-        Returns the first epoch where metric crosses the threshold.
-        Used for the '30% convergence reduction' comparison.
-        """
+    def convergence_epoch(self, metric="recall", threshold=0.90):
+        """First epoch where metric crosses the threshold."""
         for epoch, val in zip(self.history["epoch"], self.history[metric]):
             if val >= threshold:
                 return epoch
         return None
 
-    def summary(self) -> Dict[str, float]:
-        """Returns best values across all tracked metrics."""
+    def summary(self):
         return {
             "best_recall":    max(self.history["recall"],    default=0),
             "best_f1":        max(self.history["f1"],        default=0),
@@ -180,7 +103,7 @@ class MetricTracker:
             "final_val_loss": self.history["val_loss"][-1]   if self.history["val_loss"] else 0,
         }
 
-    def print_summary(self) -> None:
+    def print_summary(self):
         s = self.summary()
         best_epoch, best_recall = self.best_epoch("recall")
         conv_epoch = self.convergence_epoch("recall", threshold=0.90)
@@ -201,21 +124,8 @@ class MetricTracker:
         print(f"{'─'*55}\n")
 
 
-# Inference helper
-
-def run_inference(
-    model: torch.nn.Module,
-    loader,
-    device: torch.device,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Run full inference over a DataLoader.
-
-    Returns:
-        y_true : shape [N]
-        y_pred : shape [N]  (argmax predictions)
-        y_prob : shape [N]  (softmax probability for class 1 / PNEUMONIA)
-    """
+def run_inference(model, loader, device):
+    """Run inference over a DataLoader. Returns (y_true, y_pred, y_prob)."""
     model.eval()
     all_labels, all_preds, all_probs = [], [], []
 

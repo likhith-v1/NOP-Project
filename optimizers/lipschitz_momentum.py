@@ -1,9 +1,10 @@
-"""Wrapper module to expose the shared LBM optimizer at the top-level.
+"""Re-exports LipschitzMomentumOptimizer from chest_xray."""
 
-This keeps the existing import path `optimizers.lipschitz_momentum` working for
-both the Chest X-ray and Retinal OCT training scripts.
-"""
+import sys, os
+
+_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from chest_xray.optimizers.lipschitz_momentum import LipschitzMomentumOptimizer
 
-__all__ = ["LipschitzMomentumOptimizer"]

@@ -1,11 +1,4 @@
-"""
-Detailed post-training evaluation for a single optimizer checkpoint — Retinal OCT.
-Generates 4×4 confusion matrix, per-class ROC curves, PR curves, and detailed report.
-
-Usage:
-    python retinal_oct/evaluate.py --optimizer lipschitz_momentum
-    python retinal_oct/evaluate.py --optimizer adam
-"""
+"""Post-training evaluation for a single optimizer checkpoint — Retinal OCT."""
 
 import os
 import sys
@@ -20,9 +13,7 @@ import seaborn as sns
 from pathlib import Path
 from sklearn.preprocessing import label_binarize
 
-# Support running this script directly (e.g., `python retinal_oct/evaluate.py`).
-# When executed this way, sys.path includes `retinal_oct/` but not the repo root.
-# Add the repo root to sys.path so `import retinal_oct.*` works.
+# Add repo root to sys.path when running directly
 if __name__ == "__main__" and __package__ is None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, repo_root)
@@ -41,13 +32,12 @@ CLASS_COLORS = ["#E63946", "#457B9D", "#2A9D8F", "#F4A261"]
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})
 
 
-def evaluate(optimizer_name: str, cfg: dict) -> None:
+def evaluate(optimizer_name, cfg):
     device   = get_device(cfg)
     ckpt_dir = Path(cfg["training"]["checkpoint_dir"])
     plot_dir = Path(cfg["evaluation"]["plot_dir"]) / optimizer_name
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load model
     ckpt_path = ckpt_dir / f"{optimizer_name}_best.pth"
     if not ckpt_path.exists():
         print(f"  [ERROR] Checkpoint not found: {ckpt_path}")
@@ -59,13 +49,11 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     model.eval()
     print(f"\n  Loaded checkpoint: {ckpt_path} (epoch {ckpt['epoch']})")
 
-    # Data
     _, _, test_loader = build_dataloaders(cfg, seed=cfg["project"]["seed"])
     train_ds          = build_datasets(cfg)["train"]
     class_weights     = get_class_weights(train_ds).to(device)
     criterion         = torch.nn.CrossEntropyLoss(weight=class_weights)
 
-    # Inference
     all_labels, all_preds, all_probs = [], [], []
     total_loss = 0.0
 
@@ -75,7 +63,7 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
             labels_dev = labels.to(device)
             logits     = model(images)
             loss       = criterion(logits, labels_dev)
-            probs      = torch.softmax(logits, dim=1)   # [B, 4]
+            probs      = torch.softmax(logits, dim=1)
             preds      = logits.argmax(dim=1)
 
             total_loss  += loss.item()
@@ -92,22 +80,15 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     test_loss   = total_loss / len(test_loader)
 
     # Print metrics
-    print(f"\n  {'─'*50}")
-    print(f"  Test Results — {optimizer_name}  [Retinal OCT]")
-    print(f"  {'─'*50}")
-    print(f"  {'Metric':<20} {'Value':>8}")
-    print(f"  {'─'*30}")
+    print(f"\n  Test Results — {optimizer_name} [Retinal OCT]")
     for k, v in metrics.items():
         print(f"  {k:<20} {v:>8.4f}")
     print(f"  {'test_loss':<20} {test_loss:>8.4f}")
     print(f"\n  Per-class breakdown:")
-    print(f"  {'Class':<10} {'Recall':>8} {'Precision':>10} {'F1':>8}")
-    print(f"  {'─'*40}")
     for cls, m in per_class_m.items():
         print(f"  {cls:<10} {m['recall']:>8.4f} {m['precision']:>10.4f} {m['f1']:>8.4f}")
-    print(f"  {'─'*50}\n")
+    print(f"\n")
 
-    # Plot 1: 4×4 Confusion Matrix
     cm = compute_confusion_matrix(y_true, y_pred)
     fig, ax = plt.subplots(figsize=(7, 6))
     sns.heatmap(
@@ -123,7 +104,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] Confusion matrix → {plot_dir}/confusion_matrix.png")
 
-    # Plot 2: Per-class ROC Curves (OvR)
     y_true_bin = label_binarize(y_true, classes=list(range(NUM_CLASSES)))
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.plot([0, 1], [0, 1], "k--", lw=1)
@@ -142,7 +122,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] ROC curves → {plot_dir}/roc_curves.png")
 
-    # Plot 3: Per-class PR Curves
     fig, ax = plt.subplots(figsize=(7, 6))
     for i, cls in enumerate(CLASS_NAMES):
         prec_vals, rec_vals, _ = compute_pr_curve(y_true, y_prob, class_idx=i)
@@ -160,7 +139,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] PR curves → {plot_dir}/pr_curves.png")
 
-    # Plot 4: Per-class recall bar chart
     fig, ax = plt.subplots(figsize=(7, 5))
     recalls = [per_class_m[cls]["recall"] for cls in CLASS_NAMES]
     bars    = ax.bar(CLASS_NAMES, recalls, color=CLASS_COLORS, edgecolor="white", linewidth=1.5)
@@ -178,7 +156,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] Per-class recall → {plot_dir}/per_class_recall.png")
 
-    # Save results JSON
     result = {
         "optimizer":       optimizer_name,
         "checkpoint_epoch": int(ckpt["epoch"]),

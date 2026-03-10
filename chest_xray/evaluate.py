@@ -1,12 +1,7 @@
-"""
-Detailed post-training evaluation for a single optimizer checkpoint.
-Generates confusion matrix, ROC curve, PR curve, and a detailed report.
+"""Post-training evaluation for a single optimizer checkpoint."""
 
-Usage:
-    python evaluate.py --optimizer lipschitz_momentum
-    python evaluate.py --optimizer adam
-"""
-
+import os
+import sys
 import argparse
 import json
 import numpy as np
@@ -17,25 +12,30 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 
-from utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
-from utils.metrics import (
+# Support running directly: python chest_xray/evaluate.py
+if __name__ == "__main__" and __package__ is None:
+    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+
+from chest_xray.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
+from chest_xray.utils.metrics import (
     compute_metrics, compute_confusion_matrix,
     compute_roc_curve, compute_pr_curve
 )
-from models.densenet import build_model
-from train import get_device
+from chest_xray.models.densenet import build_model
+from chest_xray.train import get_device
 
 DPI = 300
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})
 
 
-def evaluate(optimizer_name: str, cfg: dict) -> None:
+def evaluate(optimizer_name, cfg):
     device    = get_device(cfg)
     ckpt_dir  = Path(cfg["training"]["checkpoint_dir"])
     plot_dir  = Path(cfg["evaluation"]["plot_dir"]) / optimizer_name
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load model
     ckpt_path = ckpt_dir / f"{optimizer_name}_best.pth"
     if not ckpt_path.exists():
         print(f"  [ERROR] Checkpoint not found: {ckpt_path}")
@@ -47,13 +47,11 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     model.eval()
     print(f"\n  Loaded checkpoint: {ckpt_path} (epoch {ckpt['epoch']})")
 
-    # Data
     _, _, test_loader = build_dataloaders(cfg, seed=cfg["project"]["seed"])
     train_ds          = build_datasets(cfg)["train"]
     class_weights     = get_class_weights(train_ds).to(device)
     criterion         = torch.nn.CrossEntropyLoss(weight=class_weights)
 
-    # Inference
     all_labels, all_preds, all_probs = [], [], []
     total_loss = 0.0
 
@@ -78,7 +76,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     metrics = compute_metrics(y_true, y_pred, y_prob)
     test_loss = total_loss / len(test_loader)
 
-    # Print metrics
     class_names = cfg["data"]["class_names"]
     print(f"\n  {'─'*45}")
     print(f"  Test Results — {optimizer_name}")
@@ -88,7 +85,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     print(f"    {'test_loss':<15}: {test_loss:.4f}")
     print(f"  {'─'*45}\n")
 
-    # Plot 1: Confusion Matrix
     cm = compute_confusion_matrix(y_true, y_pred)
     fig, ax = plt.subplots(figsize=(6, 5))
     sns.heatmap(
@@ -109,7 +105,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] Confusion matrix → {plot_dir}/confusion_matrix.png")
 
-    # Plot 2: ROC Curve
     fpr, tpr, _ = compute_roc_curve(y_true, y_prob)
     auc = metrics["auc_roc"]
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -124,7 +119,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] ROC curve → {plot_dir}/roc_curve.png")
 
-    # Plot 3: Precision-Recall Curve
     prec_vals, rec_vals, _ = compute_pr_curve(y_true, y_prob)
     auprc = metrics["auprc"]
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -138,7 +132,6 @@ def evaluate(optimizer_name: str, cfg: dict) -> None:
     plt.close()
     print(f"  [Plot] PR curve → {plot_dir}/pr_curve.png")
 
-    # Save detailed results JSON
     result = {
         "optimizer": optimizer_name,
         "checkpoint_epoch": int(ckpt["epoch"]),

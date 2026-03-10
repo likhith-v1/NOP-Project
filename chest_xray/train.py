@@ -1,15 +1,4 @@
-"""
-Training loop for a single optimizer run.
-
-Usage:
-    python train.py --optimizer lipschitz_momentum
-    python train.py --optimizer heavy_ball
-    python train.py --optimizer nesterov
-    python train.py --optimizer adam
-
-All results are saved to results/logs/<optimizer_name>.json
-Best checkpoints saved to results/checkpoints/<optimizer_name>_best.pth
-"""
+"""Training loop for a single optimizer run."""
 
 import os
 import sys
@@ -17,6 +6,13 @@ import json
 import time
 import argparse
 import random
+
+# Support running directly: python chest_xray/train.py
+if __name__ == "__main__" and __package__ is None:
+    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -24,17 +20,13 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from pathlib import Path
 from tqdm import tqdm
 
-# Local imports
-from chest_xray.utils.dataloader import build_dataloaders, load_config, get_class_weights
+from chest_xray.utils.dataloader import build_dataloaders, load_config, get_class_weights, build_datasets
 from chest_xray.utils.metrics import MetricTracker, compute_metrics, run_inference
 from chest_xray.models.densenet import build_model
 from optimizers.lipschitz_momentum import LipschitzMomentumOptimizer
 
 
-# Reproducibility
-
-
-def set_seed(seed: int) -> None:
+def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -42,26 +34,20 @@ def set_seed(seed: int) -> None:
         torch.mps.manual_seed(seed)
 
 
-# Device setup
-
-
-def get_device(cfg: dict) -> torch.device:
+def get_device(cfg):
     requested = cfg["project"]["device"]
     if requested == "mps" and torch.backends.mps.is_available():
-        print("  [Device] Apple MPS (Metal) — using GPU acceleration on Apple Silicon")
+        print("  Using MPS (Apple Silicon)")
         return torch.device("mps")
     elif requested == "cuda" and torch.cuda.is_available():
-        print(f"  [Device] CUDA — {torch.cuda.get_device_name(0)} detected")
+        print(f"  Using CUDA ({torch.cuda.get_device_name(0)})")
         return torch.device("cuda")
     else:
-        print("  [Device] CPU (MPS/CUDA unavailable) — training will be slow")
+        print("  Using CPU")
         return torch.device("cpu")
 
 
-# Optimizer factory
-
-
-def build_optimizer(optimizer_name: str, model: nn.Module, cfg: dict):
+def build_optimizer(optimizer_name, model, cfg):
     ocfg = cfg["optimizers"][optimizer_name]
 
     if optimizer_name == "lipschitz_momentum":
@@ -113,32 +99,10 @@ def build_optimizer(optimizer_name: str, model: nn.Module, cfg: dict):
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
 
 
-# One training epoch
-
-
-def train_one_epoch(
-    model: nn.Module,
-    loader,
-    optimizer,
-    criterion: nn.Module,
-    device: torch.device,
-    epoch: int,
-    optimizer_name: str,
-    use_hvp: bool = False,
-    hvp_interval: int = 10,
-) -> float:
-    """
-    Run one training epoch.
-
-    For LipschitzMomentumOptimizer:
-      - Every `hvp_interval` steps: use full HVP-based spectral norm (exact)
-      - Other steps: use gradient-ratio approximation (fast)
-
-    Returns mean training loss for the epoch.
-    """
+def train_one_epoch(model, loader, optimizer, criterion, device, epoch,
+                    optimizer_name, use_hvp=False, hvp_interval=10):
     model.train()
     total_loss = 0.0
-    num_batches = len(loader)
 
     pbar = tqdm(loader, desc=f"  Epoch {epoch:>3} [train]", leave=False)
 
@@ -148,17 +112,10 @@ def train_one_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
-        # Forward
         logits = model(images)
         loss = criterion(logits, labels)
-
-        # Backward
         loss.backward(retain_graph=(use_hvp and step % hvp_interval == 0))
-
-        # Gradient clipping (prevents extreme steps, important with dynamic β)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-        # Optimizer step
         if (
             use_hvp
             and step % hvp_interval == 0
@@ -173,8 +130,6 @@ def train_one_epoch(
                 optimizer.step()
 
         total_loss += loss.item()
-
-        # Update progress bar
         pbar.set_postfix(
             {
                 "loss": f"{loss.item():.4f}",
@@ -189,19 +144,10 @@ def train_one_epoch(
             }
         )
 
-    return total_loss / num_batches
+    return total_loss / len(loader)
 
 
-# Validation
-
-
-def validate(
-    model: nn.Module,
-    loader,
-    criterion: nn.Module,
-    device: torch.device,
-) -> tuple:
-    """Returns (val_loss, metrics_dict, y_true, y_pred, y_prob)."""
+def validate(model, loader, criterion, device):
     model.eval()
     total_loss = 0.0
     all_labels, all_preds, all_probs = [], [], []
@@ -231,10 +177,7 @@ def validate(
     return val_loss, metrics, y_true, y_pred, y_prob
 
 
-# Main training function
-
-
-def train(optimizer_name: str, cfg: dict) -> MetricTracker:
+def train(optimizer_name, cfg):
     seed = cfg["project"]["seed"]
     set_seed(seed)
 
@@ -247,47 +190,31 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'=' * 60}")
-    print(f"  Training with: {optimizer_name.upper()}")
-    print(f"{'=' * 60}")
+    print(f"\n  Training: {optimizer_name.upper()}")
 
-    # Data
     train_loader, val_loader, test_loader = build_dataloaders(cfg, seed=seed)
 
-    # Model
     freeze = freeze_epochs > 0
     model = build_model(cfg, freeze_features=freeze).to(device)
     model.print_param_summary()
-
-    # Loss
-    # Compute class weights from training set
-    from utils.dataloader import build_datasets
 
     train_ds = build_datasets(cfg)["train"]
     class_weights = get_class_weights(train_ds).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-    # Optimizer & Scheduler
     optimizer = build_optimizer(optimizer_name, model, cfg)
     scfg = cfg["scheduler"]
-    scheduler = CosineAnnealingLR(
-        optimizer,
-        T_max=scfg["T_max"],
-        eta_min=scfg["eta_min"],
-    )
+    scheduler = CosineAnnealingLR(optimizer, T_max=scfg["T_max"], eta_min=scfg["eta_min"])
 
-    # Tracker
     tracker = MetricTracker(optimizer_name)
     best_recall = 0.0
     patience_counter = 0
     is_lbm = isinstance(optimizer, LipschitzMomentumOptimizer)
 
-    # Training loop
     for epoch in range(1, epochs + 1):
-        # Unfreeze backbone after warmup
         if freeze and epoch == freeze_epochs + 1:
             model.unfreeze_backbone()
-            print(f"\n  [Epoch {epoch}] Backbone unfrozen — full fine-tuning begins.")
+            print(f"\n  Epoch {epoch}: backbone unfrozen")
 
         t0 = time.time()
 
@@ -310,9 +237,8 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
         scheduler.step()
         elapsed = time.time() - t0
 
-        # Log trajectories for LBM
-        beta_vals = optimizer.beta_log[-len(train_loader) :] if is_lbm else None
-        L_vals = optimizer.lipschitz_log[-len(train_loader) :] if is_lbm else None
+        beta_vals = optimizer.beta_log[-len(train_loader):] if is_lbm else None
+        L_vals = optimizer.lipschitz_log[-len(train_loader):] if is_lbm else None
 
         tracker.update(
             epoch=epoch,
@@ -340,7 +266,6 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
             )
         )
 
-        # Checkpoint
         if recall > best_recall:
             best_recall = recall
             patience_counter = 0
@@ -365,8 +290,7 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
                 )
                 break
 
-    # Final test evaluation
-    print(f"\n  Loading best checkpoint for test evaluation...")
+    print(f"\n  Loading best checkpoint...")
     ckpt = torch.load(ckpt_dir / f"{optimizer_name}_best.pth", map_location=device)
     model.load_state_dict(ckpt["model_state_dict"])
 
@@ -374,11 +298,10 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
         model, test_loader, criterion, device
     )
 
-    print(f"\n  [TEST RESULTS — {optimizer_name}]")
+    print(f"\n  Test results ({optimizer_name}):")
     for k, v in test_metrics.items():
         print(f"    {k:<15}: {v:.4f}")
 
-    # Save log
     log_data = {
         "optimizer": optimizer_name,
         "history": tracker.history,
@@ -395,23 +318,11 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     return tracker
 
 
-# Entry point
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train with a single optimizer")
-    parser.add_argument(
-        "--optimizer",
-        type=str,
-        default="lipschitz_momentum",
-        choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"],
-        help="Optimizer to use for training",
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="chest_xray/configs/config.yaml",
-        help="Path to config file",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--optimizer", type=str, default="lipschitz_momentum",
+                        choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"])
+    parser.add_argument("--config", type=str, default="chest_xray/configs/config.yaml")
     args = parser.parse_args()
 
     cfg = load_config(args.config)

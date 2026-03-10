@@ -1,16 +1,4 @@
-"""
-Training loop for a single optimizer run — Retinal OCT (4-class).
-
-Usage:
-    python retinal_oct/train.py --optimizer lipschitz_momentum
-    python retinal_oct/train.py --optimizer heavy_ball
-    python retinal_oct/train.py --optimizer nesterov
-    python retinal_oct/train.py --optimizer adam
-
-All results saved to:
-    results/retinal_oct/logs/<optimizer_name>.json
-    results/retinal_oct/checkpoints/<optimizer_name>_best.pth
-"""
+"""Training loop for a single optimizer run — Retinal OCT (4-class)."""
 
 import os
 import sys
@@ -25,9 +13,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from pathlib import Path
 from tqdm import tqdm
 
-# Support running this script directly (e.g., `python retinal_oct/train.py`).
-# When executed this way, sys.path includes `retinal_oct/` but not the repo root.
-# Add the repo root to sys.path so `import retinal_oct.*` works.
+# Add repo root to sys.path when running directly
 if __name__ == "__main__" and __package__ is None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, repo_root)
@@ -38,9 +24,7 @@ from retinal_oct.models.densenet import build_model
 from optimizers.lipschitz_momentum import LipschitzMomentumOptimizer
 
 
-# Reproducibility
-
-def set_seed(seed: int) -> None:
+def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -48,24 +32,20 @@ def set_seed(seed: int) -> None:
         torch.mps.manual_seed(seed)
 
 
-# Device
-
-def get_device(cfg: dict) -> torch.device:
+def get_device(cfg):
     requested = cfg["project"]["device"]
     if requested == "mps" and torch.backends.mps.is_available():
-        print("  [Device] Apple MPS (Metal) — GPU acceleration on Apple Silicon")
+        print("  Using MPS (Apple Silicon)")
         return torch.device("mps")
     elif requested == "cuda" and torch.cuda.is_available():
-        print(f"  [Device] CUDA — {torch.cuda.get_device_name(0)}")
+        print(f"  Using CUDA ({torch.cuda.get_device_name(0)})")
         return torch.device("cuda")
     else:
-        print("  [Device] CPU (MPS/CUDA unavailable)")
+        print("  Using CPU")
         return torch.device("cpu")
 
 
-# Optimizer factory
-
-def build_optimizer(optimizer_name: str, model: nn.Module, cfg: dict):
+def build_optimizer(optimizer_name, model, cfg):
     ocfg = cfg["optimizers"][optimizer_name]
 
     if optimizer_name == "lipschitz_momentum":
@@ -113,19 +93,8 @@ def build_optimizer(optimizer_name: str, model: nn.Module, cfg: dict):
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
 
 
-# One training epoch
-
-def train_one_epoch(
-    model: nn.Module,
-    loader,
-    optimizer,
-    criterion: nn.Module,
-    device: torch.device,
-    epoch: int,
-    optimizer_name: str,
-    use_hvp: bool = False,
-    hvp_interval: int = 10,
-) -> float:
+def train_one_epoch(model, loader, optimizer, criterion, device, epoch,
+                    optimizer_name, use_hvp=False, hvp_interval=10):
     model.train()
     total_loss = 0.0
 
@@ -172,15 +141,7 @@ def train_one_epoch(
     return total_loss / len(loader)
 
 
-# Validation
-
-def validate(
-    model: nn.Module,
-    loader,
-    criterion: nn.Module,
-    device: torch.device,
-) -> tuple:
-    """Returns (val_loss, metrics_dict, y_true, y_pred, y_prob)."""
+def validate(model, loader, criterion, device):
     model.eval()
     total_loss = 0.0
     all_labels, all_preds, all_probs = [], [], []
@@ -210,9 +171,7 @@ def validate(
     return val_loss, metrics, y_true, y_pred, y_prob
 
 
-# Main training function
-
-def train(optimizer_name: str, cfg: dict) -> MetricTracker:
+def train(optimizer_name, cfg):
     seed   = cfg["project"]["seed"]
     set_seed(seed)
 
@@ -225,25 +184,18 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'=' * 60}")
-    print(f"  Training with: {optimizer_name.upper()}  [Retinal OCT — 4 classes]")
-    print(f"{'=' * 60}")
+    print(f"\n  Training: {optimizer_name.upper()} [Retinal OCT]")
 
-    # Data
     train_loader, val_loader, test_loader = build_dataloaders(cfg, seed=seed)
 
-    # Model
     freeze = freeze_epochs > 0
     model  = build_model(cfg, freeze_features=freeze).to(device)
     model.print_param_summary()
 
-    # Loss — standard CrossEntropy (balanced dataset)
-    # Still pass class weights for minor imbalance robustness
     train_ds     = build_datasets(cfg)["train"]
     class_weights = get_class_weights(train_ds).to(device)
     criterion     = nn.CrossEntropyLoss(weight=class_weights)
 
-    # Optimizer & Scheduler
     optimizer = build_optimizer(optimizer_name, model, cfg)
     scfg      = cfg["scheduler"]
     scheduler = CosineAnnealingLR(optimizer, T_max=scfg["T_max"], eta_min=scfg["eta_min"])
@@ -256,7 +208,7 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
     for epoch in range(1, epochs + 1):
         if freeze and epoch == freeze_epochs + 1:
             model.unfreeze_backbone()
-            print(f"\n  [Epoch {epoch}] Backbone unfrozen — full fine-tuning begins.")
+            print(f"\n  Epoch {epoch}: backbone unfrozen")
 
         t0 = time.time()
 
@@ -319,8 +271,7 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
                 print(f"\n  Early stopping at epoch {epoch} (no improvement for {patience} epochs)")
                 break
 
-    # Final test evaluation
-    print(f"\n  Loading best checkpoint for test evaluation...")
+    print(f"\n  Loading best checkpoint...")
     ckpt = torch.load(ckpt_dir / f"{optimizer_name}_best.pth", map_location=device)
     model.load_state_dict(ckpt["model_state_dict"])
 
@@ -328,7 +279,7 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
         model, test_loader, criterion, device
     )
 
-    print(f"\n  [TEST RESULTS — {optimizer_name}]")
+    print(f"\n  Test results ({optimizer_name}):")
     for k, v in test_metrics.items():
         print(f"    {k:<18}: {v:.4f}")
 
@@ -349,14 +300,10 @@ def train(optimizer_name: str, cfg: dict) -> MetricTracker:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train on Retinal OCT with a single optimizer")
-    parser.add_argument(
-        "--optimizer", type=str, default="lipschitz_momentum",
-        choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"],
-    )
-    parser.add_argument(
-        "--config", type=str, default="retinal_oct/configs/config.yaml",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--optimizer", type=str, default="lipschitz_momentum",
+                        choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"])
+    parser.add_argument("--config", type=str, default="retinal_oct/configs/config.yaml")
     args = parser.parse_args()
 
     cfg = load_config(args.config)

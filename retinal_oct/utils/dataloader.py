@@ -1,34 +1,16 @@
-"""
-Data loading pipeline for Retinal OCT dataset (kermany2018).
-
-Dataset source : Kaggle — paultimothymooney/kermany2018
-Expected layout after unzip:
-    datasets/retinal-oct_data/OCT2017/
-        train/  CNV/  DME/  DRUSEN/  NORMAL/
-        val/    CNV/  DME/  DRUSEN/  NORMAL/
-        test/   CNV/  DME/  DRUSEN/  NORMAL/
-
-Key features:
-  - 4-class classification (CNV / DME / DRUSEN / NORMAL)
-  - Dataset is roughly balanced — no weighted sampler needed
-  - MPS-compatible (pin_memory=False)
-  - Reproducible via seed
-"""
+"""Data loading pipeline for Retinal OCT dataset (kermany2018)."""
 
 import os
 import yaml
 import numpy as np
 from pathlib import Path
-from typing import Tuple, Dict
 
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision import datasets, transforms
 
 
-# Helpers
-
-def load_config(config_path: str = "retinal_oct/configs/config.yaml") -> dict:
+def load_config(config_path="retinal_oct/configs/config.yaml"):
     cfg_path = Path(config_path)
     if not cfg_path.exists():
         repo_root = Path(__file__).resolve().parents[2]
@@ -39,17 +21,13 @@ def load_config(config_path: str = "retinal_oct/configs/config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-def seed_worker(worker_id: int) -> None:
+def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % (2**32)
     np.random.seed(worker_seed)
 
 
-def get_class_weights(dataset: datasets.ImageFolder) -> torch.Tensor:
-    """
-    Compute inverse-frequency class weights.
-    Returns tensor of shape [num_classes].
-    For a balanced dataset these will all be close to 1.0.
-    """
+def get_class_weights(dataset):
+    """Inverse-frequency class weights -> tensor of shape [num_classes]."""
     targets = np.array(dataset.targets)
     class_counts = np.bincount(targets)
     total = len(targets)
@@ -57,7 +35,7 @@ def get_class_weights(dataset: datasets.ImageFolder) -> torch.Tensor:
     return torch.tensor(weights, dtype=torch.float32)
 
 
-def get_sample_weights(dataset: datasets.ImageFolder) -> torch.Tensor:
+def get_sample_weights(dataset):
     targets = np.array(dataset.targets)
     class_counts = np.bincount(targets)
     class_weights = 1.0 / class_counts
@@ -65,9 +43,7 @@ def get_sample_weights(dataset: datasets.ImageFolder) -> torch.Tensor:
     return torch.tensor(sample_weights, dtype=torch.float32)
 
 
-# Transforms
-
-def build_train_transform(cfg: dict) -> transforms.Compose:
+def build_train_transform(cfg):
     aug  = cfg["data"]["augmentation"]
     norm = cfg["data"]["normalize"]
     size = cfg["data"]["image_size"]
@@ -107,7 +83,7 @@ def build_train_transform(cfg: dict) -> transforms.Compose:
     return transforms.Compose(transform_list)
 
 
-def build_eval_transform(cfg: dict) -> transforms.Compose:
+def build_eval_transform(cfg):
     norm = cfg["data"]["normalize"]
     size = cfg["data"]["image_size"]
     return transforms.Compose([
@@ -118,14 +94,10 @@ def build_eval_transform(cfg: dict) -> transforms.Compose:
     ])
 
 
-# Dataset + DataLoader factory
-
-# Expected class ordering from ImageFolder (alphabetical):
-#   0: CNV  1: DME  2: DRUSEN  3: NORMAL
 EXPECTED_CLASS_TO_IDX = {"CNV": 0, "DME": 1, "DRUSEN": 2, "NORMAL": 3}
 
 
-def build_datasets(cfg: dict) -> Dict[str, datasets.ImageFolder]:
+def build_datasets(cfg):
     root     = Path(cfg["data"]["root"])
     train_tf = build_train_transform(cfg)
     eval_tf  = build_eval_transform(cfg)
@@ -138,18 +110,13 @@ def build_datasets(cfg: dict) -> Dict[str, datasets.ImageFolder]:
 
     for split, ds in dataset_dict.items():
         assert ds.class_to_idx == EXPECTED_CLASS_TO_IDX, (
-            f"[{split}] Unexpected class ordering: {ds.class_to_idx}. "
-            f"Expected: {EXPECTED_CLASS_TO_IDX}. "
-            "Check your dataset folder names."
+            f"Unexpected class ordering in {split}: {ds.class_to_idx}"
         )
 
     return dataset_dict
 
 
-def build_dataloaders(
-    cfg: dict,
-    seed: int = 42,
-) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def build_dataloaders(cfg, seed=42):
     datasets_dict = build_datasets(cfg)
 
     g = torch.Generator()
@@ -201,9 +168,7 @@ def build_dataloaders(
     return train_loader, val_loader, test_loader
 
 
-# Stats helper
-
-def print_dataset_stats(cfg: dict) -> None:
+def print_dataset_stats(cfg):
     datasets_dict = build_datasets(cfg)
     class_names   = cfg["data"]["class_names"]
 

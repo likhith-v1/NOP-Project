@@ -1,33 +1,20 @@
-"""
-Runs all 4 optimizers sequentially and generates all comparison plots
-for the report.
-
-Usage:
-    python compare.py                    # runs all 4
-    python compare.py --plot-only        # skips training, just plots from logs
-
-Output:
-    results/plots/  ← all figures (PNG + PDF for report)
-    results/logs/   ← per-optimizer JSON logs
-"""
+"""Cross-optimizer comparison: trains all optimizers and generates plots."""
 
 import os
 import sys
 import json
 import argparse
 
-# Ensure the project root is on sys.path when running as a module (python -m chest_xray.compare)
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")   # headless rendering
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from chest_xray.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
 from chest_xray.utils.metrics import MetricTracker, compute_metrics, compute_roc_curve, compute_pr_curve, compute_confusion_matrix, run_inference
@@ -35,8 +22,6 @@ from chest_xray.models.densenet import build_model
 from chest_xray.train import train, get_device, build_optimizer
 import torch
 import torch.nn as nn
-
-# Plotting config
 
 COLORS = {
     "lipschitz_momentum": "#E63946",   # Red
@@ -71,9 +56,7 @@ plt.rcParams.update({
     "axes.spines.right": False,
 })
 
-# Load logs
-
-def load_logs(log_dir: Path, optimizers: List[str]) -> Dict[str, dict]:
+def load_logs(log_dir, optimizers):
     logs = {}
     for opt in optimizers:
         path = log_dir / f"{opt}.json"
@@ -85,9 +68,7 @@ def load_logs(log_dir: Path, optimizers: List[str]) -> Dict[str, dict]:
     return logs
 
 
-# Plot 1 — Training Loss Curves
-
-def plot_loss_curves(logs: Dict, plot_dir: Path) -> None:
+def plot_loss_curves(logs, plot_dir):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle("Training & Validation Loss — All Optimizers", fontweight="bold")
 
@@ -109,9 +90,7 @@ def plot_loss_curves(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "loss_curves")
 
 
-# Plot 2 — Recall vs Epoch (PRIMARY)
-
-def plot_recall_curves(logs: Dict, plot_dir: Path) -> None:
+def plot_recall_curves(logs, plot_dir):
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.set_title("Diagnostic Recall vs. Epoch (Primary Metric)", fontweight="bold")
 
@@ -129,9 +108,7 @@ def plot_recall_curves(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "recall_curves")
 
 
-# Plot 3 — β_t Trajectory (LBM only)
-
-def plot_beta_trajectory(logs: Dict, plot_dir: Path) -> None:
+def plot_beta_trajectory(logs, plot_dir):
     if "lipschitz_momentum" not in logs:
         return
     log = logs["lipschitz_momentum"]
@@ -169,9 +146,7 @@ def plot_beta_trajectory(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "beta_trajectory")
 
 
-# Plot 4 — L_t Trajectory (LBM only)
-
-def plot_lipschitz_trajectory(logs: Dict, plot_dir: Path) -> None:
+def plot_lipschitz_trajectory(logs, plot_dir):
     if "lipschitz_momentum" not in logs:
         return
     log = logs["lipschitz_momentum"]
@@ -197,12 +172,9 @@ def plot_lipschitz_trajectory(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "lipschitz_trajectory")
 
 
-# Plot 5 — Convergence Bar Chart
-
-def plot_convergence_comparison(logs: Dict, plot_dir: Path, threshold: float = 0.90) -> None:
+def plot_convergence_comparison(logs, plot_dir, threshold=0.90):
     """
-    Bar chart showing epoch at which each optimizer first reaches
-    `threshold` recall. Demonstrates the 30% reduction claim.
+    Bar chart: epoch at which each optimizer first reaches threshold recall.
     """
     convergence_epochs = {}
     for opt, log in logs.items():
@@ -239,9 +211,7 @@ def plot_convergence_comparison(logs: Dict, plot_dir: Path, threshold: float = 0
     _save(fig, plot_dir, "convergence_comparison")
 
 
-# Plot 6 — Summary Metrics Table (bar)
-
-def plot_metrics_summary(logs: Dict, plot_dir: Path) -> None:
+def plot_metrics_summary(logs, plot_dir):
     metrics_to_plot = ["recall", "precision", "f1", "auc_roc", "auprc", "accuracy"]
     optimizers = list(logs.keys())
     x = np.arange(len(metrics_to_plot))
@@ -266,14 +236,8 @@ def plot_metrics_summary(logs: Dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "metrics_summary")
 
 
-# Plot 7 — ROC Curves (requires reloading models)
-
-def plot_roc_curves_from_logs(logs: Dict, cfg: dict, plot_dir: Path) -> None:
-    """Plot ROC curves using saved checkpoints and the test set.
-
-    This is the most accurate way to visualize ROC curves for each optimizer.
-    If a checkpoint is missing, we fall back to a legend-only entry.
-    """
+def plot_roc_curves_from_logs(logs, cfg, plot_dir):
+    """Plot ROC curves from saved checkpoints on the test set."""
 
     device = get_device(cfg)
     _, _, test_loader = build_dataloaders(cfg, seed=cfg["project"]["seed"])
@@ -307,9 +271,7 @@ def plot_roc_curves_from_logs(logs: Dict, cfg: dict, plot_dir: Path) -> None:
     _save(fig, plot_dir, "roc_curves")
 
 
-# Print summary table
-
-def print_comparison_table(logs: Dict) -> None:
+def print_comparison_table(logs):
     metrics = ["recall", "precision", "f1", "auc_roc", "auprc", "accuracy"]
 
     header = f"{'Optimizer':<25}" + "".join(f"{m.upper():<12}" for m in metrics)
@@ -327,9 +289,7 @@ def print_comparison_table(logs: Dict) -> None:
     print("=" * len(header) + "\n")
 
 
-# Save helper
-
-def _save(fig, plot_dir: Path, name: str) -> None:
+def _save(fig, plot_dir, name):
     plot_dir.mkdir(parents=True, exist_ok=True)
     for fmt in ["png", "pdf"]:
         path = plot_dir / f"{name}.{fmt}"
@@ -338,18 +298,14 @@ def _save(fig, plot_dir: Path, name: str) -> None:
     print(f"  [Plot] Saved → {plot_dir / name}.png")
 
 
-# Main
-
-def main(plot_only: bool = False, config_path: str = "configs/config.yaml") -> None:
+def main(plot_only=False, config_path="configs/config.yaml"):
     cfg = load_config(config_path)
     optimizers = cfg["comparison"]["optimizers_to_run"]
     log_dir    = Path(cfg["training"]["log_dir"])
     plot_dir   = Path(cfg["evaluation"]["plot_dir"])
 
     if not plot_only:
-        print("\n" + "=" * 60)
-        print("  COMPARISON RUN — All 4 Optimizers")
-        print("=" * 60)
+        print("\n  Running all optimizers...")
         for opt in optimizers:
             train(opt, cfg)
 
@@ -375,9 +331,7 @@ def main(plot_only: bool = False, config_path: str = "configs/config.yaml") -> N
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--plot-only", action="store_true",
-                        help="Skip training, generate plots from existing logs")
-    parser.add_argument("--config", type=str, default="configs/config.yaml",
-                        help="Path to config YAML")
+    parser.add_argument("--plot-only", action="store_true")
+    parser.add_argument("--config", type=str, default="configs/config.yaml")
     args = parser.parse_args()
     main(plot_only=args.plot_only, config_path=args.config)
