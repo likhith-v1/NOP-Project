@@ -98,11 +98,12 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch,
     model.train()
     total_loss = 0.0
 
+    is_lbm = isinstance(optimizer, LipschitzMomentumOptimizer)
     pbar = tqdm(loader, desc=f"  Epoch {epoch:>3} [train]", leave=False)
 
     for step, (images, labels) in enumerate(pbar):
-        images = images.to(device)
-        labels = labels.to(device)
+        images = images.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
 
@@ -112,28 +113,25 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch,
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-        if (
-            use_hvp
-            and step % hvp_interval == 0
-            and isinstance(optimizer, LipschitzMomentumOptimizer)
-        ):
+        if use_hvp and step % hvp_interval == 0 and is_lbm:
             optimizer.step_with_hvp(loss, model)
         else:
-            if isinstance(optimizer, LipschitzMomentumOptimizer):
+            if is_lbm:
                 optimizer.step(current_loss=loss.item())
             else:
                 optimizer.step()
 
-        total_loss += loss.item()
+        loss_val = loss.item()
+        total_loss += loss_val
 
         pbar.set_postfix({
-            "loss": f"{loss.item():.4f}",
+            "loss": f"{loss_val:.4f}",
             **(
                 {
                     "β": f"{optimizer.get_current_beta():.3f}",
                     "λ": f"{optimizer.get_current_lambda():.1e}",
                 }
-                if isinstance(optimizer, LipschitzMomentumOptimizer)
+                if is_lbm
                 else {}
             ),
         })
@@ -148,8 +146,8 @@ def validate(model, loader, criterion, device):
 
     with torch.no_grad():
         for images, labels in loader:
-            images     = images.to(device)
-            labels_dev = labels.to(device)
+            images     = images.to(device, non_blocking=True)
+            labels_dev = labels.to(device, non_blocking=True)
 
             logits = model(images)
             loss   = criterion(logits, labels_dev)
@@ -192,8 +190,7 @@ def train(optimizer_name, cfg):
     model  = build_model(cfg, freeze_features=freeze).to(device)
     model.print_param_summary()
 
-    train_ds     = build_datasets(cfg)["train"]
-    class_weights = get_class_weights(train_ds).to(device)
+    class_weights = get_class_weights(train_loader.dataset).to(device)
     criterion     = nn.CrossEntropyLoss(weight=class_weights)
 
     optimizer = build_optimizer(optimizer_name, model, cfg)

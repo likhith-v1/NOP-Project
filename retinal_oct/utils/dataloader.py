@@ -88,7 +88,6 @@ def build_eval_transform(cfg):
     size = cfg["data"]["image_size"]
     return transforms.Compose([
         transforms.Resize((size, size)),
-        transforms.CenterCrop(size),
         transforms.ToTensor(),
         transforms.Normalize(mean=norm["mean"], std=norm["std"]),
     ])
@@ -144,6 +143,8 @@ def build_dataloaders(cfg, seed=42):
         shuffle=shuffle,
         num_workers=cfg["data"]["num_workers"],
         pin_memory=cfg["data"]["pin_memory"],
+        persistent_workers=cfg["data"].get("persistent_workers", False),
+        prefetch_factor=cfg["data"].get("prefetch_factor", 2),
         worker_init_fn=seed_worker,
         generator=g,
         drop_last=True,
@@ -155,6 +156,8 @@ def build_dataloaders(cfg, seed=42):
         shuffle=False,
         num_workers=cfg["data"]["num_workers"],
         pin_memory=cfg["data"]["pin_memory"],
+        persistent_workers=cfg["data"].get("persistent_workers", False),
+        prefetch_factor=cfg["data"].get("prefetch_factor", 2),
     )
 
     test_loader = DataLoader(
@@ -163,6 +166,8 @@ def build_dataloaders(cfg, seed=42):
         shuffle=False,
         num_workers=cfg["data"]["num_workers"],
         pin_memory=cfg["data"]["pin_memory"],
+        persistent_workers=cfg["data"].get("persistent_workers", False),
+        prefetch_factor=cfg["data"].get("prefetch_factor", 2),
     )
 
     return train_loader, val_loader, test_loader

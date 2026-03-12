@@ -107,16 +107,14 @@ class LipschitzMomentumOptimizer(Optimizer):
     ) -> float:
         """Estimates σ_max(H) via Rayleigh quotient power iteration."""
         v = [torch.randn_like(p) for p in params]
-        v_norm = math.sqrt(sum((vi**2).sum().item() for vi in v))
+        v_norm_sq = sum((vi ** 2).sum() for vi in v)
+        v_norm = v_norm_sq.sqrt().item()
         v = [vi / (v_norm + 1e-10) for vi in v]
 
         for _ in range(num_iters):
             try:
                 hv = self._hvp(loss, params, v)
             except RuntimeError as e:
-                # Some ops (e.g., max_pool2d with return_indices=False) are not
-                # infinitely differentiable, preventing second-order backprop.
-                # In that case, fall back to the faster secant approximation.
                 msg = str(e)
                 if "max_pool2d" in msg and "not infinitely differentiable" in msg:
                     if not hasattr(self, "_hvp_warning_shown"):
@@ -128,13 +126,14 @@ class LipschitzMomentumOptimizer(Optimizer):
                     return 1.0
                 raise
 
-            hv_norm = math.sqrt(sum((h**2).sum().item() for h in hv))
+            hv_norm_sq = sum((h ** 2).sum() for h in hv)
+            hv_norm = hv_norm_sq.sqrt().item()
             if hv_norm < 1e-10:
                 return 1.0
             v = [h / hv_norm for h in hv]
 
         hv = self._hvp(loss, params, v)
-        rayleigh = sum((vi * hi).sum().item() for vi, hi in zip(v, hv))
+        rayleigh = sum((vi * hi).sum() for vi, hi in zip(v, hv)).item()
         return max(abs(rayleigh), 1e-8)
 
     # Dynamic β from Lipschitz constant
@@ -238,30 +237,34 @@ class LipschitzMomentumOptimizer(Optimizer):
         group: dict,
     ) -> float:
         """L_t ≈ ||∇f(θ_t) - ∇f(θ_{t-1})|| / ||θ_t - θ_{t-1}|| (secant approx)."""
-        current_grad_norm_sq = sum(
-            (p.grad**2).sum().item() for p in params if p.grad is not None
-        )
+        # Accumulate norms on-device to avoid per-param .item() syncs
+        device = params[0].device
+        current_grad_norm_sq = torch.tensor(0.0, device=device)
+        for p in params:
+            if p.grad is not None:
+                current_grad_norm_sq += (p.grad ** 2).sum()
 
         if self._step_count <= 1:
-            return max(math.sqrt(current_grad_norm_sq), 1.0)
+            return max(math.sqrt(current_grad_norm_sq.item()), 1.0)
 
-        grad_diff_norm_sq = 0.0
-        param_diff_norm_sq = 0.0
+        grad_diff_norm_sq = torch.tensor(0.0, device=device)
+        param_diff_norm_sq = torch.tensor(0.0, device=device)
 
         for p in params:
             if p.grad is None:
                 continue
             state = self.state[p]
             if "prev_grad" in state and "prev_p" in state:
-                grad_diff_norm_sq += ((p.grad - state["prev_grad"]) ** 2).sum().item()
-                param_diff_norm_sq += ((p.data - state["prev_p"]) ** 2).sum().item()
+                grad_diff_norm_sq += ((p.grad - state["prev_grad"]) ** 2).sum()
+                param_diff_norm_sq += ((p.data - state["prev_p"]) ** 2).sum()
             state["prev_grad"] = p.grad.clone()
             state["prev_p"] = p.data.clone()
 
-        if param_diff_norm_sq < 1e-12:
-            return max(math.sqrt(current_grad_norm_sq), 1.0)
+        param_diff_val = param_diff_norm_sq.item()
+        if param_diff_val < 1e-12:
+            return max(math.sqrt(current_grad_norm_sq.item()), 1.0)
 
-        return max(math.sqrt(grad_diff_norm_sq / param_diff_norm_sq), 1e-4)
+        return max(math.sqrt(grad_diff_norm_sq.item() / param_diff_val), 1e-4)
 
     # Full HVP step (exact, call every N steps from train.py)
 
@@ -287,9 +290,9 @@ class LipschitzMomentumOptimizer(Optimizer):
                 for p in params_with_grad:
                     if p.grad is None:
                         continue
-                    d_p = p.grad.clone()
+                    d_p = p.grad
                     if group["weight_decay"] != 0:
-                        d_p.add_(p, alpha=group["weight_decay"])
+                        d_p = d_p.add(p, alpha=group["weight_decay"])
                     state = self.state[p]
                     if "momentum_buffer" not in state:
                         state["momentum_buffer"] = torch.zeros_like(p)
