@@ -34,10 +34,25 @@ from textual_plotext import PlotextPlot
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
-DATASETS = {
-    "chest_xray": "Chest X-Ray (Binary)",
-    "retinal_oct": "Retinal OCT (4-Class)",
+DATASET_META = {
+    "chest_xray": {
+        "label": "Chest X-Ray (Binary)",
+        "deprecated": True,
+    },
+    "retinal_oct": {
+        "label": "Retinal OCT (4-Class)",
+        "deprecated": False,
+    },
 }
+
+
+def get_dataset_label(dataset_key):
+    dataset = DATASET_META[dataset_key]
+    suffix = " [Deprecated]" if dataset["deprecated"] else ""
+    return f"{dataset['label']}{suffix}"
+
+
+DATASETS = {key: get_dataset_label(key) for key in DATASET_META}
 
 OPTIMIZERS = ["lipschitz_momentum", "heavy_ball", "nesterov", "adam"]
 
@@ -105,7 +120,7 @@ class OverviewTable(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
 
     def set_data(self, data, dataset):
@@ -168,7 +183,7 @@ class ConfusionMatrixDisplay(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
 
     def set_data(self, data, dataset):
@@ -235,7 +250,7 @@ class LossPlot(PlotextPlot):
     def __init__(self, loss_type="train", **kwargs):
         super().__init__(**kwargs)
         self._loss_type = loss_type
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
 
     def set_data(self, data, dataset):
@@ -276,7 +291,7 @@ class MetricPlot(PlotextPlot):
     def __init__(self, metric_key="recall", **kwargs):
         super().__init__(**kwargs)
         self._metric_key = metric_key
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
 
     def set_data(self, data, dataset, metric_key=None):
@@ -319,7 +334,7 @@ class BetaPlot(PlotextPlot):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
         self._epoch_idx = 0
 
@@ -363,7 +378,7 @@ class LipschitzPlot(PlotextPlot):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
         self._epoch_idx = 0
 
@@ -405,7 +420,7 @@ class BetaEpochAveragePlot(PlotextPlot):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
 
     def set_data(self, data, dataset):
@@ -447,7 +462,7 @@ class LipschitzEpochAveragePlot(PlotextPlot):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._dataset = "chest_xray"
+        self._dataset = "retinal_oct"
         self._data = {}
 
     def set_data(self, data, dataset):
@@ -566,7 +581,7 @@ class OptimizerDashboard(App):
     TITLE = "Optimizer Comparison Dashboard"
     SUB_TITLE = "NOP-Project · LBM vs Heavy-Ball vs Nesterov vs Adam"
 
-    current_dataset = reactive("chest_xray")
+    current_dataset = reactive("retinal_oct")
     current_epoch_idx = reactive(0)
 
     def __init__(self):
@@ -582,7 +597,7 @@ class OptimizerDashboard(App):
                 yield Label("📊 Dataset")
                 yield Select(
                     [(v, k) for k, v in DATASETS.items()],
-                    value="chest_xray",
+                    value="retinal_oct",
                     id="dataset-select",
                     allow_blank=False,
                 )
@@ -702,9 +717,12 @@ class OptimizerDashboard(App):
         info_lines = [
             f"[bold]Dataset Info[/bold]",
             f"─────────────",
+            f"Status: {'Deprecated' if DATASET_META[ds]['deprecated'] else 'Active'}",
             f"Optimizers: {len(logs)}",
             f"Test results: {len(test_results)}",
         ]
+        if DATASET_META[ds]["deprecated"]:
+            info_lines.append("[yellow]Chest X-Ray is deprecated.[/yellow]")
         if logs:
             opt0 = next(iter(logs))
             n_ep = len(logs[opt0]["history"]["epoch"])
