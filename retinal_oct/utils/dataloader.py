@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 from torchvision import datasets, transforms
 
 
@@ -26,9 +26,16 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
 
 
+def _get_targets(dataset):
+    """Extract targets from ImageFolder or Subset."""
+    if hasattr(dataset, "targets"):
+        return np.array(dataset.targets)
+    return np.array([dataset.dataset.targets[i] for i in dataset.indices])
+
+
 def get_class_weights(dataset):
     """Inverse-frequency class weights -> tensor of shape [num_classes]."""
-    targets = np.array(dataset.targets)
+    targets = _get_targets(dataset)
     class_counts = np.bincount(targets)
     total = len(targets)
     weights = total / (len(class_counts) * class_counts)
@@ -36,7 +43,7 @@ def get_class_weights(dataset):
 
 
 def get_sample_weights(dataset):
-    targets = np.array(dataset.targets)
+    targets = _get_targets(dataset)
     class_counts = np.bincount(targets)
     class_weights = 1.0 / class_counts
     sample_weights = class_weights[targets]
@@ -101,15 +108,34 @@ def build_datasets(cfg):
     train_tf = build_train_transform(cfg)
     eval_tf  = build_eval_transform(cfg)
 
-    dataset_dict = {
-        "train": datasets.ImageFolder(root / "train", transform=train_tf),
-        "val":   datasets.ImageFolder(root / "val",   transform=eval_tf),
-        "test":  datasets.ImageFolder(root / "test",  transform=eval_tf),
-    }
+    val_dir = root / "val"
+    if val_dir.is_dir() and any(val_dir.iterdir()):
+        dataset_dict = {
+            "train": datasets.ImageFolder(root / "train", transform=train_tf),
+            "val":   datasets.ImageFolder(val_dir,        transform=eval_tf),
+            "test":  datasets.ImageFolder(root / "test",  transform=eval_tf),
+        }
+    else:
+        full_train = datasets.ImageFolder(root / "train", transform=train_tf)
+        n = len(full_train)
+        val_frac = cfg["data"].get("val_fraction", 0.1)
+        n_val = int(n * val_frac)
+        n_train = n - n_val
+        gen = torch.Generator().manual_seed(cfg["project"].get("seed", 42))
+        train_idx, val_idx = torch.utils.data.random_split(
+            range(n), [n_train, n_val], generator=gen
+        )
+        val_ds = datasets.ImageFolder(root / "train", transform=eval_tf)
+        dataset_dict = {
+            "train": Subset(full_train, train_idx.indices),
+            "val":   Subset(val_ds, val_idx.indices),
+            "test":  datasets.ImageFolder(root / "test", transform=eval_tf),
+        }
 
     for split, ds in dataset_dict.items():
-        assert ds.class_to_idx == EXPECTED_CLASS_TO_IDX, (
-            f"Unexpected class ordering in {split}: {ds.class_to_idx}"
+        actual = ds.class_to_idx if hasattr(ds, "class_to_idx") else ds.dataset.class_to_idx
+        assert actual == EXPECTED_CLASS_TO_IDX, (
+            f"Unexpected class ordering in {split}: {actual}"
         )
 
     return dataset_dict
@@ -182,11 +208,12 @@ def print_dataset_stats(cfg):
     print("=" * 55)
 
     for split, ds in datasets_dict.items():
-        targets = np.array(ds.targets)
-        counts  = np.bincount(targets)
+        targets = _get_targets(ds)
+        classes = ds.classes if hasattr(ds, "classes") else ds.dataset.classes
+        counts  = np.bincount(targets, minlength=len(classes))
         total   = len(targets)
         print(f"\n  [{split.upper()}]  Total: {total}")
-        for idx, cls in enumerate(ds.classes):
+        for idx, cls in enumerate(classes):
             pct = 100 * counts[idx] / total
             bar = "█" * int(pct / 4)
             print(f"    {cls:<10} {counts[idx]:>6}  ({pct:5.1f}%)  {bar}")

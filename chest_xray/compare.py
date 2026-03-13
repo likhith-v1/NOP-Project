@@ -332,6 +332,6 @@ def main(plot_only=False, config_path="configs/config.yaml"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--plot-only", action="store_true")
-    parser.add_argument("--config", type=str, default="configs/config.yaml")
+    parser.add_argument("--config", type=str, default="chest_xray/configs/config.yaml")
     args = parser.parse_args()
     main(plot_only=args.plot_only, config_path=args.config)

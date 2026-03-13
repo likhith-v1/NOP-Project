@@ -148,7 +148,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--optimizer", type=str, default="lipschitz_momentum",
                         choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"])
-    parser.add_argument("--config", type=str, default="configs/config.yaml")
+    parser.add_argument("--config", type=str, default="chest_xray/configs/config.yaml")
     args = parser.parse_args()
 
     cfg = load_config(args.config)

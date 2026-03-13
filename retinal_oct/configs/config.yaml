@@ -8,7 +8,7 @@ project:
 
 # Dataset
 data:
-  root: "datasets/retinal-oct_data/OCT2017"
+  root: "datasets/OCT"
   image_size: 224
   num_classes: 4
   class_names: ["CNV", "DME", "DRUSEN", "NORMAL"]
