@@ -12,19 +12,19 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 
-# Support running directly: python chest_xray/evaluate.py
+# Support running directly: python chest_xray_deprecated/evaluate.py
 if __name__ == "__main__" and __package__ is None:
     _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _repo_root not in sys.path:
         sys.path.insert(0, _repo_root)
 
-from chest_xray.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
-from chest_xray.utils.metrics import (
+from chest_xray_deprecated.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
+from chest_xray_deprecated.utils.metrics import (
     compute_metrics, compute_confusion_matrix,
     compute_roc_curve, compute_pr_curve
 )
-from chest_xray.models.densenet import build_model
-from chest_xray.train import get_device
+from chest_xray_deprecated.models.densenet import build_model
+from chest_xray_deprecated.train import get_device
 
 DPI = 300
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})
@@ -148,7 +148,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--optimizer", type=str, default="lipschitz_momentum",
                         choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"])
-    parser.add_argument("--config", type=str, default="chest_xray/configs/config.yaml")
+    parser.add_argument("--config", type=str, default="chest_xray_deprecated/configs/config.yaml")
     args = parser.parse_args()
 
     cfg = load_config(args.config)

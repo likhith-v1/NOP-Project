@@ -9,7 +9,7 @@ project:
 # Datasets
 
 data:
-  root: "datasets/xray_data/chest_xray"
+  root: "datasets/xray_data/chest_xray_deprecated"
   image_size: 224
   num_classes: 2
   class_names: ["NORMAL", "PNEUMONIA"]
@@ -54,8 +54,8 @@ training:
   early_stopping_patience: 7
   primary_metric: "recall"    # for diagnostics tasks
   save_best_only: true
-  checkpoint_dir: "results/chest_xray/checkpoints"
-  log_dir: "results/chest_xray/logs"
+  checkpoint_dir: "results/chest_xray_deprecated/checkpoints"
+  log_dir: "results/chest_xray_deprecated/logs"
 
 loss: # weighted cross-entropy is preferred for imbalanced datasets
   name: "weighted_cross_entropy" # weights are handled dynamically based on the dataset or set manually
@@ -113,7 +113,7 @@ scheduler:
 # Evaluation
 evaluation:
   metrics: ["accuracy", "recall", "precision", "f1", "auc_roc", "auprc"]
-  plot_dir: "results/chest_xray/plots"
+  plot_dir: "results/chest_xray_deprecated/plots"
   plot_formats: ["png", "pdf"]   # pdf for report, png for viewing
   dpi: 300
 

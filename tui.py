@@ -35,7 +35,7 @@ from textual_plotext import PlotextPlot
 RESULTS_DIR = Path(__file__).parent / "results"
 
 DATASET_META = {
-    "chest_xray": {
+    "chest_xray_deprecated": {
         "label": "Chest X-Ray (Binary)",
         "deprecated": True,
     },
@@ -197,7 +197,7 @@ class ConfusionMatrixDisplay(Static):
             self.update("[dim]No test results found.[/dim]")
             return
 
-        is_binary = self._dataset == "chest_xray"
+        is_binary = self._dataset == "chest_xray_deprecated"
         class_names = ["NORMAL", "PNEUMONIA"] if is_binary else ["CNV", "DME", "DRUSEN", "NORMAL"]
 
         sections = []

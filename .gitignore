@@ -3,5 +3,5 @@ datasets
 .venv
 __pycache__/
 *.py[cod]
-results/chest_xray/checkpoints/
+results/chest_xray_deprecated/checkpoints/
 results/retinal_oct/checkpoints/

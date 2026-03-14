@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision import datasets, transforms
 
 
-def load_config(config_path="chest_xray/configs/config.yaml"):
+def load_config(config_path="chest_xray_deprecated/configs/config.yaml"):
     """Load YAML config, falling back to repo root if not found."""
     cfg_path = Path(config_path)
     if not cfg_path.exists():

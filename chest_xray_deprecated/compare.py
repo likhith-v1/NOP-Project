@@ -16,10 +16,10 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from pathlib import Path
 
-from chest_xray.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
-from chest_xray.utils.metrics import MetricTracker, compute_metrics, compute_roc_curve, compute_pr_curve, compute_confusion_matrix, run_inference
-from chest_xray.models.densenet import build_model
-from chest_xray.train import train, get_device, build_optimizer
+from chest_xray_deprecated.utils.dataloader import load_config, build_dataloaders, build_datasets, get_class_weights
+from chest_xray_deprecated.utils.metrics import MetricTracker, compute_metrics, compute_roc_curve, compute_pr_curve, compute_confusion_matrix, run_inference
+from chest_xray_deprecated.models.densenet import build_model
+from chest_xray_deprecated.train import train, get_device, build_optimizer
 import torch
 import torch.nn as nn
 
@@ -332,6 +332,6 @@ def main(plot_only=False, config_path="configs/config.yaml"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--plot-only", action="store_true")
-    parser.add_argument("--config", type=str, default="chest_xray/configs/config.yaml")
+    parser.add_argument("--config", type=str, default="chest_xray_deprecated/configs/config.yaml")
     args = parser.parse_args()
     main(plot_only=args.plot_only, config_path=args.config)

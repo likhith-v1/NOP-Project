@@ -7,7 +7,7 @@ import time
 import argparse
 import random
 
-# Support running directly: python chest_xray/train.py
+# Support running directly: python chest_xray_deprecated/train.py
 if __name__ == "__main__" and __package__ is None:
     _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _repo_root not in sys.path:
@@ -20,9 +20,9 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from pathlib import Path
 from tqdm import tqdm
 
-from chest_xray.utils.dataloader import build_dataloaders, load_config, get_class_weights, build_datasets
-from chest_xray.utils.metrics import MetricTracker, compute_metrics, run_inference
-from chest_xray.models.densenet import build_model
+from chest_xray_deprecated.utils.dataloader import build_dataloaders, load_config, get_class_weights, build_datasets
+from chest_xray_deprecated.utils.metrics import MetricTracker, compute_metrics, run_inference
+from chest_xray_deprecated.models.densenet import build_model
 from optimizers.lipschitz_momentum import LipschitzMomentumOptimizer
 
 
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--optimizer", type=str, default="lipschitz_momentum",
                         choices=["lipschitz_momentum", "heavy_ball", "nesterov", "adam"])
-    parser.add_argument("--config", type=str, default="chest_xray/configs/config.yaml")
+    parser.add_argument("--config", type=str, default="chest_xray_deprecated/configs/config.yaml")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
