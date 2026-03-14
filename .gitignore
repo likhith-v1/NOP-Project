@@ -15,3 +15,5 @@ datasets/
 # Model checkpoints
 results/chest_xray_deprecated/checkpoints/
 results/retinal_oct/checkpoints/
+
+/LICENSE
