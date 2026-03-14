@@ -3,7 +3,7 @@
 project:
   name: "LipschitzMomentum-ChestXRay"
   seed: 42
-  device: "mps" # Allowed values: mps, cuda
+  device: "mps" # Allowed values: cpu, mps, cuda
 
 
 # Datasets

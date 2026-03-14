@@ -35,10 +35,14 @@ def set_seed(seed):
 def get_device(cfg):
     requested = cfg["project"]["device"]
 
-    if requested not in {"mps", "cuda"}:
+    if requested not in {"cpu", "mps", "cuda"}:
         raise ValueError(
-            f"Unsupported device '{requested}'. Use 'mps' or 'cuda'."
+            f"Unsupported device '{requested}'. Use 'cpu', 'mps', or 'cuda'."
         )
+
+    if requested == "cpu":
+        print("  Using CPU")
+        return torch.device("cpu")
 
     if requested == "mps" and torch.backends.mps.is_available():
         print("  Using MPS (Apple Silicon)")
@@ -48,15 +52,15 @@ def get_device(cfg):
         print(f"  Using CUDA ({torch.cuda.get_device_name(0)})")
         return torch.device("cuda")
 
-    available = []
+    available = ["cpu"]
     if torch.backends.mps.is_available():
         available.append("mps")
     if torch.cuda.is_available():
         available.append("cuda")
-    available_str = ", ".join(available) if available else "none"
+    available_str = ", ".join(available)
 
     raise RuntimeError(
-        f"Requested device '{requested}' is not available. Available GPU backends: {available_str}."
+        f"Requested device '{requested}' is not available. Available backends: {available_str}."
     )
 
 
