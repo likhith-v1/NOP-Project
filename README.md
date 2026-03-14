@@ -2,10 +2,9 @@
 
 Training and comparison framework for the Lipschitz Momentum optimizer on medical image classification.
 
-## Project Status
+## Main Project: Retinal OCT
 
-- Retinal OCT is the active pipeline.
-- Chest X-Ray is kept for reference under a deprecated namespace.
+Retinal OCT is the active and maintained pipeline in this repository.
 
 ## Hardware Support
 
@@ -18,7 +17,6 @@ This project supports all three backends:
 Choose your backend in the dataset config files:
 
 - retinal OCT: `retinal_oct/configs/config.yaml`
-- deprecated chest x-ray: `chest_xray_deprecated/configs/config.yaml`
 
 Example:
 
@@ -32,71 +30,77 @@ project:
 1. Install dependencies
 
 ```bash
-python -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 2. Train one optimizer (default is lipschitz_momentum)
 
 ```bash
-python retinal_oct/train.py
+python3 retinal_oct/train.py
 ```
 
 3. Run all configured optimizers + generate comparison plots
 
 ```bash
-python retinal_oct/compare.py --config retinal_oct/configs/config.yaml
+python3 retinal_oct/compare.py --config retinal_oct/configs/config.yaml
 ```
 
 4. Regenerate plots only (without retraining)
 
 ```bash
-python retinal_oct/compare.py --plot-only --config retinal_oct/configs/config.yaml
+python3 retinal_oct/compare.py --plot-only --config retinal_oct/configs/config.yaml
 ```
 
 5. Evaluate a single checkpoint and export test plots
 
 ```bash
-python retinal_oct/evaluate.py --optimizer lipschitz_momentum --config retinal_oct/configs/config.yaml
+python3 retinal_oct/evaluate.py --optimizer lipschitz_momentum --config retinal_oct/configs/config.yaml
 ```
 
-## Full Script Flow (run.sh)
+## Retinal OCT Script Flow
 
-The shell script uses the sequence below:
+For the main project workflow:
 
 ```bash
 # Install dependencies
-python -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 # Optional: faster install with uv
 # uv pip install -r requirements.txt
 
-# Optional dataset download (requires Kaggle API setup)
-kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
-unzip chest-xray-pneumonia.zip -d xray_data
-
-kaggle datasets download -d paultimothymooney/kermany2018
-unzip kermany2018.zip -d retinal-oct_data
+# Download the Retinal OCT dataset from your preferred source
+# and place it under datasets/OCT in train/val/test class folders.
 
 # Default active training run
-python retinal_oct/train.py
-
-# Optional deprecated dataset run
-# python chest_xray_deprecated/train.py
+python3 retinal_oct/train.py
 ```
 
-## Results Layout
+## Retinal OCT Results Layout
 
 - checkpoints: `results/retinal_oct/checkpoints`
 - training logs: `results/retinal_oct/logs`
 - evaluation/comparison plots: `results/retinal_oct/plots`
 
-## Deprecated Pipeline
+## Separate Section: Chest X-Ray (Deprecated)
 
-If needed, the old chest x-ray path is still runnable:
+Chest X-Ray is not the main pipeline and is kept only for reference/legacy runs.
+
+Config file:
+
+- `chest_xray_deprecated/configs/config.yaml`
+
+Legacy commands:
 
 ```bash
-python chest_xray_deprecated/train.py
-python chest_xray_deprecated/compare.py --config chest_xray_deprecated/configs/config.yaml
+python3 chest_xray_deprecated/train.py
+python3 chest_xray_deprecated/compare.py --config chest_xray_deprecated/configs/config.yaml
+```
+
+Optional legacy dataset download:
+
+```bash
+kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
+unzip chest-xray-pneumonia.zip -d xray_data
 ```
 
 Related deprecated paths:
@@ -107,6 +111,5 @@ Related deprecated paths:
 
 ## Data Sources
 
-- OCT2017 / Kermany2018: https://data.mendeley.com/datasets/rscbjbr9sj/3
-- OCT exploration notebook/source: https://www.kaggle.com/code/paultimothymooney/detect-retina-damage-from-oct-images
+- Retinal OCT dataset: https://data.mendeley.com/datasets/rscbjbr9sj/3
 - Chest X-Ray Pneumonia dataset: https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia

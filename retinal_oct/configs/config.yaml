@@ -36,7 +36,7 @@ data:
     mean: [0.485, 0.456, 0.406]
     std:  [0.229, 0.224, 0.225]
 
-  # Kermany2018 is roughly balanced — no weighted sampler needed
+  # Dataset is roughly balanced — no weighted sampler needed
   use_weighted_sampler: false
 
 

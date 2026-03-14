@@ -1,4 +1,4 @@
-"""Data loading pipeline for Retinal OCT dataset (kermany2018)."""
+"""Data loading pipeline for the Retinal OCT dataset."""
 
 import os
 import yaml
@@ -207,7 +207,7 @@ def print_dataset_stats(cfg):
     class_names   = cfg["data"]["class_names"]
 
     print("\n" + "=" * 55)
-    print("  Dataset Statistics: Retinal OCT (kermany2018)")
+    print("  Dataset Statistics: Retinal OCT")
     print("=" * 55)
 
     for split, ds in datasets_dict.items():
