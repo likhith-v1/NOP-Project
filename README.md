@@ -71,10 +71,11 @@ python -m pip install -r requirements.txt
 # uv pip install -r requirements.txt
 
 # Optional dataset download (requires Kaggle API setup)
-# kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
-# unzip chest-xray-pneumonia.zip -d xray_data
-# kaggle datasets download -d paultimothymooney/kermany2018
-# unzip kermany2018.zip -d retinal-oct_data
+kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
+unzip chest-xray-pneumonia.zip -d xray_data
+
+kaggle datasets download -d paultimothymooney/kermany2018
+unzip kermany2018.zip -d retinal-oct_data
 
 # Default active training run
 python retinal_oct/train.py
