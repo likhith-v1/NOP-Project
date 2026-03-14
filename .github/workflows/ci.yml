@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile \
+            tui.py \
+            retinal_oct/train.py \
+            retinal_oct/compare.py \
+            retinal_oct/evaluate.py \
+            chest_xray_deprecated/train.py \
+            chest_xray_deprecated/compare.py \
+            chest_xray_deprecated/evaluate.py

@@ -1,7 +1,17 @@
-datasets
-*.zip
-.venv
+# Environments and caches
+.venv/
 __pycache__/
 *.py[cod]
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS metadata
+.DS_Store
+
+# Data artifacts
+datasets/
+*.zip
+
+# Model checkpoints
 results/chest_xray_deprecated/checkpoints/
 results/retinal_oct/checkpoints/

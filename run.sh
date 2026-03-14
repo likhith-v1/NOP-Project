@@ -1,8 +1,11 @@
-# Script for training the model
-# Install Dependencies
-pip install -r requirements.txt
+#!/usr/bin/env bash
+set -euo pipefail
 
-# or use uv (recommeded for faster installs)
+# Script for training models
+# Install dependencies
+python -m pip install -r requirements.txt
+
+# Or use uv (recommended for faster installs)
 # uv pip install -r requirements.txt
 
 # Kaggle Dataset Download (if not already downloaded)
@@ -19,5 +22,8 @@ pip install -r requirements.txt
 # unzip kermany2018.zip -d retinal-oct_data
 
 
-# Start training (default: chest_xray_deprecated)
-python chest_xray_deprecated/train.py
+# Start training (default: active dataset)
+python retinal_oct/train.py
+
+# Deprecated dataset (optional)
+# python chest_xray_deprecated/train.py

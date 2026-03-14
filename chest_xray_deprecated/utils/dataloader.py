@@ -128,6 +128,9 @@ def build_dataloaders(cfg, seed=42):
     """Returns (train_loader, val_loader, test_loader)."""
     datasets_dict = build_datasets(cfg)
 
+    # Pinned memory improves H2D transfer for CUDA, but is not useful on CPU/MPS.
+    effective_pin_memory = bool(cfg["data"].get("pin_memory", True) and torch.cuda.is_available())
+
     g = torch.Generator()
     g.manual_seed(seed)
 
@@ -153,7 +156,7 @@ def build_dataloaders(cfg, seed=42):
         sampler=sampler,
         shuffle=shuffle,
         num_workers=cfg["data"]["num_workers"],
-        pin_memory=cfg["data"]["pin_memory"],
+        pin_memory=effective_pin_memory,
         persistent_workers=cfg["data"].get("persistent_workers", False),
         prefetch_factor=cfg["data"].get("prefetch_factor", 2),
         worker_init_fn=seed_worker,
@@ -166,7 +169,7 @@ def build_dataloaders(cfg, seed=42):
         batch_size=cfg["data"]["batch_size_val"],
         shuffle=False,
         num_workers=cfg["data"]["num_workers"],
-        pin_memory=cfg["data"]["pin_memory"],
+        pin_memory=effective_pin_memory,
         persistent_workers=cfg["data"].get("persistent_workers", False),
         prefetch_factor=cfg["data"].get("prefetch_factor", 2),
     )
@@ -176,7 +179,7 @@ def build_dataloaders(cfg, seed=42):
         batch_size=cfg["data"]["batch_size_test"],
         shuffle=False,
         num_workers=cfg["data"]["num_workers"],
-        pin_memory=cfg["data"]["pin_memory"],
+        pin_memory=effective_pin_memory,
         persistent_workers=cfg["data"].get("persistent_workers", False),
         prefetch_factor=cfg["data"].get("prefetch_factor", 2),
     )

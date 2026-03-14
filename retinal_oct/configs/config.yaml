@@ -3,7 +3,7 @@
 project:
   name: "LipschitzMomentum-RetinalOCT"
   seed: 42
-  device: "mps"   # Apple Silicon otherwise falls back to cpu
+  device: "mps"   # Allowed values: mps, cuda
 
 
 # Dataset

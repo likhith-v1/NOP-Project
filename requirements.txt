@@ -1,4 +1,4 @@
-# Python 3.12 & above required (3.12 preferred for stablity & reliability)
+# Python 3.12 and above required (3.12 preferred for stability and reliability)
 
 torch
 torchvision
@@ -14,3 +14,6 @@ ipykernel
 kaggle
 scipy
 pyyaml
+textual
+textual-plotext
+plotext

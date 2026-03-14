@@ -36,15 +36,30 @@ def set_seed(seed):
 
 def get_device(cfg):
     requested = cfg["project"]["device"]
+
+    if requested not in {"mps", "cuda"}:
+        raise ValueError(
+            f"Unsupported device '{requested}'. Use 'mps' or 'cuda'."
+        )
+
     if requested == "mps" and torch.backends.mps.is_available():
         print("  Using MPS (Apple Silicon)")
         return torch.device("mps")
-    elif requested == "cuda" and torch.cuda.is_available():
+
+    if requested == "cuda" and torch.cuda.is_available():
         print(f"  Using CUDA ({torch.cuda.get_device_name(0)})")
         return torch.device("cuda")
-    else:
-        print("  Using CPU")
-        return torch.device("cpu")
+
+    available = []
+    if torch.backends.mps.is_available():
+        available.append("mps")
+    if torch.cuda.is_available():
+        available.append("cuda")
+    available_str = ", ".join(available) if available else "none"
+
+    raise RuntimeError(
+        f"Requested device '{requested}' is not available. Available GPU backends: {available_str}."
+    )
 
 
 def build_optimizer(optimizer_name, model, cfg):
